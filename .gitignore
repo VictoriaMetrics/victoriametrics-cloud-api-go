@@ -1,0 +1,17 @@
+/tmp
+/tags
+*.pprof
+/bin
+.idea
+.vscode
+.zed
+*.test
+*.swp
+/vmdocs
+/gocache-for-docker
+.DS_store
+*.tmp
+coverage.txt
+cspell.json
+*~
+
