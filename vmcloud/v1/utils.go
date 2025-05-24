@@ -32,8 +32,14 @@ func requestAPI[R any](ctx context.Context, a *VMCloudAPIClient, method string, 
 		return result, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(respBodyBytes))
 	}
 	if len(respBodyBytes) > 0 {
-		if err = json.Unmarshal(respBodyBytes, &result); err != nil {
-			return result, fmt.Errorf("failed to unmarshal response body: %w", err)
+		// Special case for string type - just return the response body as a string
+		if stringResult, ok := any(&result).(*(string)); ok {
+			*stringResult = string(respBodyBytes)
+		} else {
+			// For other types, unmarshal as JSON
+			if err = json.Unmarshal(respBodyBytes, &result); err != nil {
+				return result, fmt.Errorf("failed to unmarshal response body: %w", err)
+			}
 		}
 	}
 	return result, nil

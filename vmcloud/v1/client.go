@@ -43,6 +43,9 @@ func WithBaseURL(baseURL string) VMCloudAPIClientOption {
 
 // New creates a new VMCloudAPIClient instance with the provided API key and options.
 func New(apiKey string, options ...VMCloudAPIClientOption) (*VMCloudAPIClient, error) {
+	if apiKey == "" {
+		return nil, fmt.Errorf("API key cannot be empty")
+	}
 	result := &VMCloudAPIClient{
 		c:       http.DefaultClient,
 		apiKey:  apiKey,

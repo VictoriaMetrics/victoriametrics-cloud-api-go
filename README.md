@@ -1,6 +1,7 @@
 # API client library for VictoriaMetrics Cloud
 
 ![Latest Release](https://img.shields.io/github/v/release/VictoriaMetrics/victoriametrics-cloud-api-go?sort=semver&label=&logo=github&labelColor=gray&color=gray&link=https%3A%2F%2Fgithub.com%2FVictoriaMetrics%2Fvictoriametrics-cloud-api-go%2Freleases%2Flatest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/VictoriaMetrics/victoriametrics-cloud-api-go.svg)](https://pkg.go.dev/github.com/VictoriaMetrics/victoriametrics-cloud-api-go)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 ![Slack](https://img.shields.io/badge/Join-4A154B?logo=slack&link=https%3A%2F%2Fslack.victoriametrics.com)
 ![X](https://img.shields.io/twitter/follow/VictoriaMetrics?style=flat&label=Follow&color=black&logo=x&labelColor=black&link=https%3A%2F%2Fx.com%2FVictoriaMetrics)
@@ -31,11 +32,11 @@ go get github.com/VictoriaMetrics/victoriametrics-cloud-api-go
 
 For detailed examples, see the [examples](examples) directory:
 
-- [Client initialization](examples/01_client_init.go) - Different ways to initialize the client
-- [Listing cloud providers, regions, and tiers](examples/02_providers_regions_tiers.go) - How to retrieve information about available cloud providers, regions, and tiers
-- [Deployments management](examples/03_deployments_management.go) - How to list, create, update, and delete deployments
-- [Access tokens management](examples/04_access_tokens_management.go) - How to list, create, reveal, and delete access tokens
-- [Rule files management](examples/05_rule_files_management.go) - How to list, create, update, and delete alerting/recording rule files
+- [Client initialization](examples/01_client_init/01_client_init.go) - Different ways to initialize the client
+- [Listing cloud providers, regions, and tiers](examples/02_providers_regions_tiers/02_providers_regions_tiers.go) - How to retrieve information about available cloud providers, regions, and tiers
+- [Deployments management](examples/03_deployments_management/03_deployments_management.go) - How to list, create, update, and delete deployments
+- [Access tokens management](examples/04_access_tokens_management/04_access_tokens_management.go) - How to list, create, reveal, and delete access tokens
+- [Rule files management](examples/05_rule_files_management/05_rule_files_management.go) - How to list, create, update, and delete alerting/recording rule files
 
 ### Creating a client
 
@@ -43,8 +44,6 @@ For detailed examples, see the [examples](examples) directory:
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
 
 	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/vmcloud/v1"
@@ -164,6 +163,16 @@ for _, fileName := range ruleFiles {
 ## Documentation
 
 For more information about the VictoriaMetrics Cloud API, please refer to the [VictoriaMetrics Cloud documentation](https://docs.victoriametrics.com/victoriametrics-cloud/api/).
+
+## Testing
+
+The library includes a comprehensive test suite. To run the tests:
+
+```bash
+make test
+```
+
+The tests use mocked HTTP responses and don't require actual API credentials.
 
 ## License
 
