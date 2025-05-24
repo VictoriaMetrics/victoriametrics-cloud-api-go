@@ -1,4 +1,4 @@
-# API client library for VictoriaMetrics Cloud
+# Client library for VictoriaMetrics Cloud API
 
 ![Latest Release](https://img.shields.io/github/v/release/VictoriaMetrics/victoriametrics-cloud-api-go?sort=semver&label=&logo=github&labelColor=gray&color=gray&link=https%3A%2F%2Fgithub.com%2FVictoriaMetrics%2Fvictoriametrics-cloud-api-go%2Freleases%2Flatest)
 [![Go Reference](https://pkg.go.dev/badge/github.com/VictoriaMetrics/victoriametrics-cloud-api-go.svg)](https://pkg.go.dev/github.com/VictoriaMetrics/victoriametrics-cloud-api-go)
