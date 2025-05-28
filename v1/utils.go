@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 )
 
 func requestAPI[R any](ctx context.Context, a *VMCloudAPIClient, method string, body io.Reader, path ...string) (R, error) {
@@ -33,7 +32,7 @@ func requestAPI[R any](ctx context.Context, a *VMCloudAPIClient, method string, 
 	}
 	if len(respBodyBytes) > 0 {
 		// Special case for string type - just return the response body as a string
-		if stringResult, ok := any(&result).(*(string)); ok {
+		if stringResult, ok := any(&result).(*string); ok {
 			*stringResult = string(respBodyBytes)
 		} else {
 			// For other types, unmarshal as JSON
@@ -43,26 +42,4 @@ func requestAPI[R any](ctx context.Context, a *VMCloudAPIClient, method string, 
 		}
 	}
 	return result, nil
-}
-
-var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-
-func isValidUUID(uuid string) bool {
-	return uuidRegex.MatchString(uuid)
-}
-
-func checkDeploymentID(deploymentID string) error {
-	if deploymentID == "" {
-		return fmt.Errorf("deployment ID cannot be empty")
-	}
-	if !isValidUUID(deploymentID) {
-		return fmt.Errorf("invalid deployment ID format: %s", deploymentID)
-	}
-	return nil
-}
-
-var tenantIDRegex = regexp.MustCompile(`^(\d+)(:\d+)?$`)
-
-func isValidTenantID(tenantID string) bool {
-	return tenantIDRegex.MatchString(tenantID)
 }

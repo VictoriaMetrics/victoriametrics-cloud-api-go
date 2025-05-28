@@ -97,45 +97,33 @@ func (a *VMCloudAPIClient) GetDeploymentDetails(ctx context.Context, deploymentI
 
 // CreateDeployment creates a new deployment in VictoriaMetrics Cloud based on the provided deployment configuration.
 func (a *VMCloudAPIClient) CreateDeployment(ctx context.Context, deployment DeploymentCreationRequest) (DeploymentInfo, error) {
-	if deployment.Name == "" {
-		return DeploymentInfo{}, fmt.Errorf("deployment name cannot be empty")
+	// Validate common parameters
+	err := validateCommonDeploymentParams(
+		deployment.Name,
+		deployment.Tier,
+		deployment.MaintenanceWindow,
+		deployment.StorageSize,
+		deployment.StorageSizeUnit,
+		deployment.Retention,
+		deployment.RetentionUnit,
+		deployment.DeduplicationUnit,
+	)
+	if err != nil {
+		return DeploymentInfo{}, err
 	}
-	if deployment.Type != DeploymentTypeSingleNode && deployment.Type != DeploymentTypeCluster {
-		return DeploymentInfo{}, fmt.Errorf("invalid deployment type: %s", deployment.Type)
+
+	// Validate creation-specific parameters
+	err = validateCreateDeploymentParams(
+		deployment.Type,
+		deployment.Region,
+		deployment.Provider,
+		deployment.StorageSize,
+		deployment.StorageSizeUnit,
+	)
+	if err != nil {
+		return DeploymentInfo{}, err
 	}
-	if deployment.Region == "" {
-		return DeploymentInfo{}, fmt.Errorf("deployment region cannot be empty")
-	}
-	if deployment.Tier == 0 {
-		return DeploymentInfo{}, fmt.Errorf("deployment tier cannot be empty")
-	}
-	if deployment.Provider != DeploymentCloudProviderAWS {
-		return DeploymentInfo{}, fmt.Errorf("unsupported deployment cloud provider: %s", deployment.Provider)
-	}
-	if deployment.MaintenanceWindow != MaintenanceWindowWeekendDays && deployment.MaintenanceWindow != MaintenanceWindowBusinessDays {
-		return DeploymentInfo{}, fmt.Errorf("invalid maintenance window: %s", deployment.MaintenanceWindow)
-	}
-	if deployment.StorageSize == 0 {
-		return DeploymentInfo{}, fmt.Errorf("deployment storage size cannot be zero")
-	}
-	if deployment.StorageSizeUnit != StorageUnitGB && deployment.StorageSizeUnit != StorageUnitTB {
-		return DeploymentInfo{}, fmt.Errorf("invalid storage size unit: %s", deployment.StorageSizeUnit)
-	}
-	if deployment.StorageSizeUnit == StorageUnitGB && deployment.StorageSize < 10 {
-		return DeploymentInfo{}, fmt.Errorf("deployment storage size must be at least 10 GB")
-	}
-	if deployment.Type == DeploymentTypeSingleNode && deployment.StorageSizeUnit == StorageUnitTB && deployment.StorageSize > 16 {
-		return DeploymentInfo{}, fmt.Errorf("single-node deployments cannot have more than 16 TB of storage")
-	}
-	if deployment.Retention == 0 {
-		return DeploymentInfo{}, fmt.Errorf("deployment retention cannot be zero")
-	}
-	if deployment.RetentionUnit != DurationUnitDay && deployment.RetentionUnit != DurationUnitMonth {
-		return DeploymentInfo{}, fmt.Errorf("invalid retention unit: %s, only days and months are supported", deployment.RetentionUnit)
-	}
-	if deployment.DeduplicationUnit != DurationUnitSecond && deployment.DeduplicationUnit != DurationUnitMillisecond {
-		return DeploymentInfo{}, fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", deployment.DeduplicationUnit)
-	}
+
 	body, err := json.Marshal(deployment)
 	if err != nil {
 		return DeploymentInfo{}, fmt.Errorf("failed to marshal deployment create request: %w", err)
@@ -148,33 +136,22 @@ func (a *VMCloudAPIClient) UpdateDeployment(ctx context.Context, deploymentID st
 	if err := checkDeploymentID(deploymentID); err != nil {
 		return DeploymentInfo{}, err
 	}
-	if deployment.Name == "" {
-		return DeploymentInfo{}, fmt.Errorf("deployment name cannot be empty")
+
+	// Validate common parameters
+	err := validateCommonDeploymentParams(
+		deployment.Name,
+		deployment.Tier,
+		deployment.MaintenanceWindow,
+		deployment.StorageSize,
+		deployment.StorageSizeUnit,
+		deployment.Retention,
+		deployment.RetentionUnit,
+		deployment.DeduplicationUnit,
+	)
+	if err != nil {
+		return DeploymentInfo{}, err
 	}
-	if deployment.Tier == 0 {
-		return DeploymentInfo{}, fmt.Errorf("deployment tier cannot be empty")
-	}
-	if deployment.MaintenanceWindow != MaintenanceWindowWeekendDays && deployment.MaintenanceWindow != MaintenanceWindowBusinessDays {
-		return DeploymentInfo{}, fmt.Errorf("invalid maintenance window: %s", deployment.MaintenanceWindow)
-	}
-	if deployment.StorageSize == 0 {
-		return DeploymentInfo{}, fmt.Errorf("deployment storage size cannot be zero")
-	}
-	if deployment.StorageSizeUnit != StorageUnitGB && deployment.StorageSizeUnit != StorageUnitTB {
-		return DeploymentInfo{}, fmt.Errorf("invalid storage size unit: %s", deployment.StorageSizeUnit)
-	}
-	if deployment.StorageSizeUnit == StorageUnitGB && deployment.StorageSize < 10 {
-		return DeploymentInfo{}, fmt.Errorf("deployment storage size must be at least 10 GB")
-	}
-	if deployment.Retention == 0 {
-		return DeploymentInfo{}, fmt.Errorf("deployment retention cannot be zero")
-	}
-	if deployment.RetentionUnit != DurationUnitDay && deployment.RetentionUnit != DurationUnitMonth {
-		return DeploymentInfo{}, fmt.Errorf("invalid retention unit: %s, only days and months are supported", deployment.RetentionUnit)
-	}
-	if deployment.DeduplicationUnit != DurationUnitSecond && deployment.DeduplicationUnit != DurationUnitMillisecond {
-		return DeploymentInfo{}, fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", deployment.DeduplicationUnit)
-	}
+
 	body, err := json.Marshal(deployment)
 	if err != nil {
 		return DeploymentInfo{}, fmt.Errorf("failed to marshal deployment update request: %w", err)
