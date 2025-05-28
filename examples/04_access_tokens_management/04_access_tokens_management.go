@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/vmcloud/v1"
+	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/v1"
 )
 
 func main() {

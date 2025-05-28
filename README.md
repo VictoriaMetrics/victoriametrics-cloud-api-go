@@ -46,7 +46,7 @@ package main
 import (
 	"log"
 
-	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/vmcloud/v1"
+	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/v1"
 )
 
 func main() {
@@ -77,19 +77,19 @@ for _, deployment := range deployments {
 ### Creating a deployment
 
 ```go
-deployment := v1.DeploymentCreationRequest{
+deployment := vmcloud.DeploymentCreationRequest{
 	Name:              "my-deployment", // name of the deployment
-	Type:              v1.DeploymentTypeSingleNode, // single-node deployment
-	Provider:          v1.DeploymentCloudProviderAWS, // AWS as cloud provider
+	Type:              vmcloud.DeploymentTypeSingleNode, // single-node deployment
+	Provider:          vmcloud.DeploymentCloudProviderAWS, // AWS as cloud provider
 	Region:            "us-east-2", // US East (Ohio)
 	Tier:              21, // s.starter.a
 	StorageSize:       10, // storage size in GB
-	StorageSizeUnit:   v1.StorageUnitGB,
+	StorageSizeUnit:   vmcloud.StorageUnitGB,
 	Retention:         30, // data retention period in days
-	RetentionUnit:     v1.DurationUnitDay, 
+	RetentionUnit:     vmcloud.DurationUnitDay, 
 	Deduplication:     10, // deduplication period in seconds
-	DeduplicationUnit: v1.DurationUnitSecond,
-	MaintenanceWindow: v1.MaintenanceWindowWeekendDays, // maintenance window on weekends
+	DeduplicationUnit: vmcloud.DurationUnitSecond,
+	MaintenanceWindow: vmcloud.MaintenanceWindowWeekendDays, // maintenance window on weekends
 }
 
 createdDeployment, err := client.CreateDeployment(context.Background(), deployment)
@@ -104,9 +104,9 @@ fmt.Printf("Created deployment: %s (ID: %s)\n", createdDeployment.Name, createdD
 
 ```go
 // Create a new access token for a deployment
-tokenRequest := v1.AccessTokenCreateRequest{
+tokenRequest := vmcloud.AccessTokenCreateRequest{
 	Description: "My API token",
-	Type:        v1.AccessModeReadWrite,
+	Type:        vmcloud.AccessModeReadWrite,
 }
 
 createdToken, err := client.CreateDeploymentAccessToken(context.Background(), "deployment-id", tokenRequest)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/vmcloud/v1"
+	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/v1"
 )
 
 func main() {

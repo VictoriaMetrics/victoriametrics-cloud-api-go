@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 
-	vmcloud "github.com/VictoriaMetrics/victoriametrics-cloud-api-go/vmcloud/v1"
+	"github.com/VictoriaMetrics/victoriametrics-cloud-api-go/v1"
 )
 
 func main() {
 	// Create a new client with your API key
-	client, err := vmcloud.New("your-api-key")
+	client, err := v1.New("your-api-key")
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
@@ -63,7 +63,7 @@ func main() {
 	// Example 4: Find a specific tier by ID
 	fmt.Println("=== Finding a Specific Tier ===")
 	const targetTierID = 21 // Example tier ID (s.small.a)
-	var foundTier *vmcloud.TierInfo
+	var foundTier *v1.TierInfo
 
 	for _, tier := range tiers {
 		if tier.ID == targetTierID {

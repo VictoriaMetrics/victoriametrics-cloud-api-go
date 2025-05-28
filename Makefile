@@ -1,8 +1,8 @@
 fmt:
-	gofmt -l -w -s ./vmcloud
+	gofmt -l -w -s ./v1
 
 vet:
-	go vet ./vmcloud/...
+	go vet ./v1/...
 
 check-all: fmt vet golangci-lint govulncheck check-licenses
 
@@ -33,4 +33,4 @@ check-licenses: install-wwhrd
 	wwhrd check -f .wwhrd.yml
 
 test:
-	go test ./vmcloud/...
+	go test ./v1/...
