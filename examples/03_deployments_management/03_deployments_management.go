@@ -29,7 +29,7 @@ func main() {
 		fmt.Printf("Deployment: %s (ID: %s)\n", deployment.Name, deployment.ID)
 		fmt.Printf("  Type: %s, Status: %s\n", deployment.Type, deployment.Status)
 		fmt.Printf("  Provider: %s, Region: %s\n", deployment.CloudProvider, deployment.Region)
-		fmt.Printf("  VM Version: %d GB\n", deployment.Version)
+		fmt.Printf("  VM Version: %s GB\n", deployment.Version)
 		fmt.Printf("  Created: %s\n", deployment.CreatedAt.Format(time.RFC3339))
 		fmt.Println()
 	}
@@ -61,7 +61,7 @@ func main() {
 		fmt.Printf("Created deployment: %s (ID: %s)\n", createdDeployment.Name, createdDeployment.ID)
 		fmt.Printf("  Type: %s, Status: %s\n", createdDeployment.Type, createdDeployment.Status)
 		fmt.Printf("  Provider: %s, Region: %s\n", createdDeployment.CloudProvider, createdDeployment.Region)
-		fmt.Printf("  VM Version: %d GB\n", createdDeployment.Version)
+		fmt.Printf("  VM Version: %s GB\n", createdDeployment.Version)
 		fmt.Printf("  Created: %s\n", createdDeployment.CreatedAt.Format(time.RFC3339))
 		fmt.Printf("  Access Endpoint: %s\n", createdDeployment.AccessEndpoint)
 		fmt.Println()
