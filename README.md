@@ -8,12 +8,13 @@
 ![Reddit](https://img.shields.io/reddit/subreddit-subscribers/VictoriaMetrics?style=flat&label=Join&labelColor=red&logoColor=white&logo=reddit&link=https%3A%2F%2Fwww.reddit.com%2Fr%2FVictoriaMetrics)
 
 Go client library for interacting with the [VictoriaMetrics Cloud](https://victoriametrics.com/products/cloud/) API. 
-This library provides a simple and idiomatic way to manage VictoriaMetrics Cloud resources programmatically.
+This library provides a simple and idiomatic way to manage VictoriaMetrics Cloud resources programmatically:
+
+- Full library documentation you can find in [package docs](https://pkg.go.dev/github.com/VictoriaMetrics/victoriametrics-cloud-api-go/v1).
+- More info about VictoriaMetrics Cloud can be found in the [official documentation](https://docs.victoriametrics.com/victoriametrics-cloud/).
+- More information about the API can be found in the [API documentation](https://docs.victoriametrics.com/victoriametrics-cloud/api/).
 
 Just sign up for a [free trial](https://victoriametrics.cloud) to get started with VictoriaMetrics Cloud.
-
-More info about VictoriaMetrics Cloud can be found in the [official documentation](https://docs.victoriametrics.com/victoriametrics-cloud/).
-More information about the API can be found in the [API documentation](https://docs.victoriametrics.com/victoriametrics-cloud/api/).
 
 ## Features
 
