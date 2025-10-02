@@ -38,6 +38,11 @@ func main() {
 			fmt.Printf("  Type: %s\n", token.Type)
 			fmt.Printf("  Created by: %s at %s\n", token.CreatedBy, token.CreatedAt.Format(time.RFC3339))
 			fmt.Printf("  Secret: %s (first 4 chars)\n", token.Secret)
+			if token.LastUsedAt != nil && !token.LastUsedAt.IsZero() {
+				fmt.Printf("  Last used at: %v\n", token.LastUsedAt)
+			} else {
+				fmt.Printf("  Wasn't used last 7 days")
+			}
 			fmt.Println()
 		}
 	}
