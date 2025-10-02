@@ -23,7 +23,7 @@ func TestListDeploymentRuleFileNames(t *testing.T) {
 	}
 
 	// Setup test server
-	server, client := setupTestServer(t, http.StatusOK, string(responseJSON), "/api/v1/deployments", deploymentID, "rule-sets")
+	server, client := setupTestServer(t, http.StatusOK, string(responseJSON), "/api/v1/deployments", deploymentID, "rule-sets", "files")
 	defer server.Close()
 
 	// Call the method
@@ -63,7 +63,7 @@ groups:
 	ruleFileName := "alert1.yml"
 
 	// Setup test server
-	server, client := setupTestServer(t, http.StatusOK, ruleContent, "/api/v1/deployments", deploymentID, "rule-sets", ruleFileName)
+	server, client := setupTestServer(t, http.StatusOK, ruleContent, "/api/v1/deployments", deploymentID, "rule-sets", "files", ruleFileName)
 	defer server.Close()
 
 	// Call the method
@@ -96,7 +96,7 @@ groups:
 	ruleFileName := "alert1.yml"
 
 	// Setup test server
-	server, client := setupTestServer(t, http.StatusOK, "", "/api/v1/deployments", deploymentID, "rule-sets", ruleFileName)
+	server, client := setupTestServer(t, http.StatusOK, "", "/api/v1/deployments", deploymentID, "rule-sets", "files", ruleFileName)
 	defer server.Close()
 
 	// Call the method
@@ -124,7 +124,7 @@ groups:
 	ruleFileName := "new-alert.yml"
 
 	// Setup test server
-	server, client := setupTestServer(t, http.StatusOK, "", "/api/v1/deployments", deploymentID, "rule-sets", ruleFileName)
+	server, client := setupTestServer(t, http.StatusOK, "", "/api/v1/deployments", deploymentID, "rule-sets", "files", ruleFileName)
 	defer server.Close()
 
 	// Call the method
@@ -139,7 +139,7 @@ func TestDeleteDeploymentRuleFile(t *testing.T) {
 	ruleFileName := "alert1.yml"
 
 	// Setup test server
-	server, client := setupTestServer(t, http.StatusOK, "", "/api/v1/deployments", deploymentID, "rule-sets", ruleFileName)
+	server, client := setupTestServer(t, http.StatusOK, "", "/api/v1/deployments", deploymentID, "rule-sets", "files", ruleFileName)
 	defer server.Close()
 
 	// Call the method
