@@ -1,6 +1,6 @@
-run:
-  timeout: 2m
+version: "2"
 
-issues:
-  exclude-dirs:
-    - examples
+linters:
+  exclusions:
+    paths:
+      - examples

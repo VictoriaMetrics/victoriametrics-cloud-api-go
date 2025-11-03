@@ -84,7 +84,7 @@ deployment := vmcloud.DeploymentCreationRequest{
 	Provider:          vmcloud.DeploymentCloudProviderAWS, // AWS as cloud provider
 	Region:            "us-east-2", // US East (Ohio)
 	Tier:              21, // s.starter.a
-	StorageSize:       10, // storage size in GB
+	StorageSize:       20, // storage size in GB
 	StorageSizeUnit:   vmcloud.StorageUnitGB,
 	Retention:         30, // data retention period in days
 	RetentionUnit:     vmcloud.DurationUnitDay, 
