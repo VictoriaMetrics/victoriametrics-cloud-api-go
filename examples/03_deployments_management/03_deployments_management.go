@@ -44,7 +44,7 @@ func main() {
 			Provider:          vmcloud.DeploymentCloudProviderAWS,
 			Region:            "us-east-2", // US East (Ohio)
 			Tier:              21,          // s.small.a
-			StorageSize:       10,          // 10 GB storage
+			StorageSize:       20,          // 20 GB storage
 			StorageSizeUnit:   vmcloud.StorageUnitGB,
 			Retention:         30, // 30 days retention
 			RetentionUnit:     vmcloud.DurationUnitDay,
@@ -97,7 +97,7 @@ func main() {
 		updateRequest := vmcloud.DeploymentUpdateRequest{
 			Name:              "updated-example-deployment",
 			Tier:              22, // Upgrade to a larger tier (s.micro.a)
-			StorageSize:       20, // Increase storage
+			StorageSize:       30, // Increase storage
 			StorageSizeUnit:   vmcloud.StorageUnitGB,
 			Retention:         60, // Increase retention
 			RetentionUnit:     vmcloud.DurationUnitDay,

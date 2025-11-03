@@ -64,7 +64,7 @@ func main() {
 
 	// Comment out in a real application if you don't want to actually create the rule
 	/*
-		err = client.CreateDeploymentRuleFileContent(ctx, deploymentID, ruleFileName, ruleContent)
+		err = client.CreateDeploymentRuleFileContent(ctx, deploymentID, ruleFileName, exampleRuleContent)
 		if err != nil {
 			log.Fatalf("Failed to create rule file: %v", err)
 		}
