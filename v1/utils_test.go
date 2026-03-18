@@ -1,6 +1,10 @@
 package v1
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -72,6 +76,107 @@ func TestCheckDeploymentID(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestContextWithDynamicAPIKey(t *testing.T) {
+	tests := []struct {
+		name   string
+		apiKey string
+	}{
+		{
+			name:   "non-empty key",
+			apiKey: "my-secret-key",
+		},
+		{
+			name:   "empty key",
+			apiKey: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := ContextWithDynamicAPIKey(context.Background(), tt.apiKey)
+			got, ok := ctx.Value(apiKeyContextKey).(string)
+			if !ok {
+				t.Fatal("ContextWithDynamicAPIKey() did not store a string value in context")
+			}
+			if got != tt.apiKey {
+				t.Errorf("ContextWithDynamicAPIKey() stored %q, want %q", got, tt.apiKey)
+			}
+		})
+	}
+}
+
+func TestRequestAPIDynamicAPIKey(t *testing.T) {
+	tests := []struct {
+		name           string
+		clientKey      string
+		ctxKey         *string // nil means don't set context key
+		expectedHeader string
+	}{
+		{
+			name:           "static key, no ctx",
+			clientKey:      "static-key",
+			ctxKey:         nil,
+			expectedHeader: "static-key",
+		},
+		{
+			name:           "static key + ctx key, client takes precedence",
+			clientKey:      "static-key",
+			ctxKey:         strPtr("dynamic-key"),
+			expectedHeader: "static-key",
+		},
+		{
+			name:           "dynamic + ctx key",
+			clientKey:      DynamicAPIKey,
+			ctxKey:         strPtr("per-request-key"),
+			expectedHeader: "per-request-key",
+		},
+		{
+			name:           "dynamic, no ctx key",
+			clientKey:      DynamicAPIKey,
+			ctxKey:         nil,
+			expectedHeader: "",
+		},
+		{
+			name:           "dynamic + empty ctx key",
+			clientKey:      DynamicAPIKey,
+			ctxKey:         strPtr(""),
+			expectedHeader: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedHeader string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedHeader = r.Header.Get(AccessTokenHeader)
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode([]CloudProviderInfo{})
+			}))
+			defer server.Close()
+
+			client, err := New(tt.clientKey, WithBaseURL(server.URL))
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+
+			ctx := context.Background()
+			if tt.ctxKey != nil {
+				ctx = ContextWithDynamicAPIKey(ctx, *tt.ctxKey)
+			}
+
+			_, _ = client.ListCloudProviders(ctx)
+
+			if capturedHeader != tt.expectedHeader {
+				t.Errorf("request header %q = %q, want %q", AccessTokenHeader, capturedHeader, tt.expectedHeader)
+			}
+		})
+	}
+}
+
+func strPtr(s string) *string {
+	return &s
 }
 
 func TestIsValidTenantID(t *testing.T) {

@@ -10,16 +10,18 @@ import (
 
 func TestNew(t *testing.T) {
 	tests := []struct {
-		name    string
-		apiKey  string
-		options []VMCloudAPIClientOption
-		wantErr bool
+		name       string
+		apiKey     string
+		wantAPIKey string
+		options    []VMCloudAPIClientOption
+		wantErr    bool
 	}{
 		{
-			name:    "valid client with API key",
-			apiKey:  "test-api-key",
-			options: nil,
-			wantErr: false,
+			name:       "valid client with API key",
+			apiKey:     "test-api-key",
+			wantAPIKey: "test-api-key",
+			options:    nil,
+			wantErr:    false,
 		},
 		{
 			name:    "empty API key",
@@ -28,8 +30,9 @@ func TestNew(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:   "valid client with custom HTTP client",
-			apiKey: "test-api-key",
+			name:       "valid client with custom HTTP client",
+			apiKey:     "test-api-key",
+			wantAPIKey: "test-api-key",
 			options: []VMCloudAPIClientOption{
 				WithHTTPClient(&http.Client{
 					Timeout: 30 * time.Second,
@@ -38,20 +41,29 @@ func TestNew(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "valid client with custom base URL",
-			apiKey: "test-api-key",
+			name:       "valid client with custom base URL",
+			apiKey:     "test-api-key",
+			wantAPIKey: "test-api-key",
 			options: []VMCloudAPIClientOption{
 				WithBaseURL("https://custom-api.victoriametrics.com"),
 			},
 			wantErr: false,
 		},
 		{
-			name:   "invalid base URL",
-			apiKey: "test-api-key",
+			name:       "invalid base URL",
+			apiKey:     "test-api-key",
+			wantAPIKey: "test-api-key",
 			options: []VMCloudAPIClientOption{
 				WithBaseURL("://invalid-url"),
 			},
 			wantErr: true,
+		},
+		{
+			name:       "dynamic API key stores empty string",
+			apiKey:     DynamicAPIKey,
+			wantAPIKey: "",
+			options:    nil,
+			wantErr:    false,
 		},
 	}
 
@@ -66,8 +78,8 @@ func TestNew(t *testing.T) {
 				if client == nil {
 					t.Errorf("New() returned nil client without error")
 				} else {
-					if client.apiKey != tt.apiKey {
-						t.Errorf("New() client.apiKey = %v, want %v", client.apiKey, tt.apiKey)
+					if client.apiKey != tt.wantAPIKey {
+						t.Errorf("New() client.apiKey = %v, want %v", client.apiKey, tt.wantAPIKey)
 					}
 				}
 			}
