@@ -69,6 +69,7 @@ func TestCreateDeploymentAccessToken(t *testing.T) {
 	request := AccessTokenCreateRequest{
 		Type:        AccessModeReadWrite,
 		Description: "Test token description",
+		TenantID:    "108",
 	}
 
 	// Create a sample response
@@ -77,6 +78,7 @@ func TestCreateDeploymentAccessToken(t *testing.T) {
 		Secret:      "token-value-123",
 		Type:        request.Type,
 		Description: request.Description,
+		TenantID:    request.TenantID,
 		CreatedBy:   "test-user",
 		CreatedAt:   time.Now(),
 	}
@@ -108,6 +110,73 @@ func TestCreateDeploymentAccessToken(t *testing.T) {
 	}
 	if result.Secret != response.Secret {
 		t.Errorf("CreateDeploymentAccessToken() Secret = %s, want %s", result.Secret, response.Secret)
+	}
+}
+
+func TestCreateDeploymentAccessToken_TenantIDValidation(t *testing.T) {
+	deploymentID := "123e4567-e89b-12d3-a456-426614174000"
+
+	tests := []struct {
+		name     string
+		tenantID string
+		wantErr  bool
+	}{
+		{
+			name:     "valid simple number",
+			tenantID: "108",
+			wantErr:  false,
+		},
+		{
+			name:     "valid with project ID",
+			tenantID: "108:2",
+			wantErr:  false,
+		},
+		{
+			name:     "invalid empty string",
+			tenantID: "",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid letters",
+			tenantID: "abc",
+			wantErr:  true,
+		},
+		{
+			name:     "invalid format with slash",
+			tenantID: "108/2",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := AccessToken{
+				ID:          "token-id-1",
+				Secret:      "token-value-123",
+				Type:        AccessModeRead,
+				Description: "test",
+				CreatedBy:   "test-user",
+				CreatedAt:   time.Now(),
+			}
+			responseJSON, err := json.Marshal(response)
+			if err != nil {
+				t.Fatalf("Failed to marshal response: %v", err)
+			}
+
+			server, client := setupTestServer(t, http.StatusOK, string(responseJSON), "/api/v1/deployments", deploymentID, "access_tokens")
+			defer server.Close()
+
+			request := AccessTokenCreateRequest{
+				Type:        AccessModeRead,
+				Description: "test token",
+				TenantID:    tt.tenantID,
+			}
+
+			_, err = client.CreateDeploymentAccessToken(context.Background(), deploymentID, request)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CreateDeploymentAccessToken() with tenantID=%q error = %v, wantErr %v", tt.tenantID, err, tt.wantErr)
+			}
+		})
 	}
 }
 
