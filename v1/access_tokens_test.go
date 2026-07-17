@@ -132,9 +132,9 @@ func TestCreateDeploymentAccessToken_TenantIDValidation(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "invalid empty string",
+			name:     "valid empty string (tenant ID is optional)",
 			tenantID: "",
-			wantErr:  true,
+			wantErr:  false,
 		},
 		{
 			name:     "invalid letters",
