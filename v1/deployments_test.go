@@ -81,8 +81,8 @@ func TestGetDeploymentDetails(t *testing.T) {
 		StorageSizeGb:      10,
 		RetentionValue:     30,
 		RetentionUnit:      DurationUnitDay,
-		DeduplicationValue: 10,
-		DeduplicationUnit:  DurationUnitSecond,
+		DeduplicationValue: ptrTo[uint32](10),
+		DeduplicationUnit:  ptrTo(DurationUnitSecond),
 		MaintenanceWindow:  MaintenanceWindowWeekendDays,
 		AccessEndpoint:     "https://test-deployment.victoriametrics.com",
 	}
@@ -152,8 +152,8 @@ func TestCreateDeployment(t *testing.T) {
 		StorageSizeGb:      request.StorageSize,
 		RetentionValue:     request.Retention,
 		RetentionUnit:      request.RetentionUnit,
-		DeduplicationValue: request.Deduplication,
-		DeduplicationUnit:  request.DeduplicationUnit,
+		DeduplicationValue: ptrTo(request.Deduplication),
+		DeduplicationUnit:  ptrTo(request.DeduplicationUnit),
 		MaintenanceWindow:  request.MaintenanceWindow,
 		AccessEndpoint:     "https://test-deployment.victoriametrics.com",
 	}
@@ -218,8 +218,8 @@ func TestUpdateDeployment(t *testing.T) {
 		StorageSizeGb:      request.StorageSize,
 		RetentionValue:     request.Retention,
 		RetentionUnit:      request.RetentionUnit,
-		DeduplicationValue: request.Deduplication,
-		DeduplicationUnit:  request.DeduplicationUnit,
+		DeduplicationValue: ptrTo(request.Deduplication),
+		DeduplicationUnit:  ptrTo(request.DeduplicationUnit),
 		MaintenanceWindow:  request.MaintenanceWindow,
 		AccessEndpoint:     "https://test-deployment.victoriametrics.com",
 	}

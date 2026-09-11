@@ -4,15 +4,33 @@ import (
 	"time"
 )
 
-// DeploymentType - type of the deployment (single_node / cluster)
+// DeploymentType - type of the deployment (single_node / cluster / vlogs_single / vtraces_single)
 type DeploymentType string
 
 const (
-	// DeploymentTypeSingleNode - single node deployment
+	// DeploymentTypeSingleNode - single node VictoriaMetrics deployment
 	DeploymentTypeSingleNode DeploymentType = "single_node"
-	// DeploymentTypeCluster - cluster deployment
+	// DeploymentTypeCluster - cluster VictoriaMetrics deployment
 	DeploymentTypeCluster DeploymentType = "cluster"
+	// DeploymentTypeVLogs - single node VictoriaLogs deployment
+	DeploymentTypeVLogs DeploymentType = "vlogs_single"
+	// DeploymentTypeVTraces - single node VictoriaTraces deployment.
+	// Available only for accounts where VictoriaTraces is enabled.
+	DeploymentTypeVTraces DeploymentType = "vtraces_single"
 )
+
+// SupportsDeduplication reports whether the deployment type has a deduplication window.
+// VictoriaLogs and VictoriaTraces deployments do not, and the API ignores the
+// deduplication fields of create and update requests for them.
+func (t DeploymentType) SupportsDeduplication() bool {
+	return t == DeploymentTypeSingleNode || t == DeploymentTypeCluster
+}
+
+// SupportsAlertingRules reports whether the deployment type runs vmalert and therefore
+// serves the rule file endpoints. VictoriaLogs and VictoriaTraces deployments do not.
+func (t DeploymentType) SupportsAlertingRules() bool {
+	return t == DeploymentTypeSingleNode || t == DeploymentTypeCluster
+}
 
 func (t DeploymentType) String() string {
 	return string(t)
@@ -113,11 +131,16 @@ func (u StorageUnit) String() string {
 	return string(u)
 }
 
-// TierInfo represents the information about the tier in public VMCloud API
+// TierInfo represents the information about the tier in public VMCloud API.
+//
+// The limit fields a tier reports depend on its Type: single_node and cluster tiers
+// report the time series limits, vlogs_single and vtraces_single tiers report the
+// byte and stream limits. Fields that do not apply to a tier are absent from the
+// response and stay at zero.
 type TierInfo struct {
 	// ID is the unique identifier of the tier of given type
 	ID uint32 `json:"id"`
-	// Type of the deployment (single_node / cluster)
+	// Type of the deployment (single_node / cluster / vlogs_single / vtraces_single)
 	Type DeploymentType `json:"type"`
 	// CloudProvider is the name of Cloud provider of the deployment (aws)
 	CloudProvider DeploymentCloudProvider `json:"cloud_provider"`
@@ -125,18 +148,35 @@ type TierInfo struct {
 	Name string `json:"name"`
 	// ComputeCostPerHour is the cost of the deployment per hour
 	ComputeCostPerHour float64 `json:"compute_cost_per_hour"`
-	// IngestionRate is the maximum ingestion rate of the tier
-	IngestionRate int `json:"ingestion_rate"`
-	// ActiveTimeSeries is the maximum number of active time series of the tier
-	ActiveTimeSeries int `json:"active_time_series"`
-	// NewSeriesOver24h is the maximum number of new series over 24 hours of the tier
-	NewSeriesOver24h int `json:"new_series_over_24h"`
-	// DatapointsReadRate is the maximum read rate of the tier
-	DatapointsReadRate int `json:"datapoints_read_rate"`
-	// SeriesReadPerQuery is the maximum number of series read per query of the tier
-	SeriesReadPerQuery int `json:"series_read_per_query"`
-	// AccessTokenLimit is the maximum number of concurrent requests for each access token
+	// IngestionRate is the maximum ingestion rate of the tier, metrics tiers only
+	IngestionRate int `json:"ingestion_rate,omitempty"`
+	// ActiveTimeSeries is the maximum number of active time series of the tier, metrics tiers only
+	ActiveTimeSeries int `json:"active_time_series,omitempty"`
+	// NewSeriesOver24h is the maximum number of new series over 24 hours of the tier, metrics tiers only
+	NewSeriesOver24h int `json:"new_series_over_24h,omitempty"`
+	// DatapointsReadRate is the maximum read rate of the tier, metrics tiers only
+	DatapointsReadRate int `json:"datapoints_read_rate,omitempty"`
+	// SeriesReadPerQuery is the maximum number of series read per query of the tier, metrics tiers only
+	SeriesReadPerQuery int `json:"series_read_per_query,omitempty"`
+	// IngestionRateBytes is the maximum ingestion rate in bytes per second,
+	// vlogs_single and vtraces_single tiers only
+	IngestionRateBytes int `json:"ingestion_rate_bytes,omitempty"`
+	// ActiveLogStreams is the maximum number of active streams of the tier,
+	// vlogs_single and vtraces_single tiers only
+	ActiveLogStreams int `json:"active_log_streams,omitempty"`
+	// NewStreamsOver24h is the maximum number of new streams over 24 hours of the tier,
+	// vlogs_single and vtraces_single tiers only
+	NewStreamsOver24h int `json:"new_streams_over_24h,omitempty"`
+	// DataReadRate is the maximum read rate in bytes per second of the tier,
+	// vlogs_single and vtraces_single tiers only
+	DataReadRate int `json:"data_read_rate,omitempty"`
+	// BytesPerQuery is the maximum number of bytes scanned per query,
+	// vlogs_single and vtraces_single tiers only
+	BytesPerQuery int `json:"bytes_per_query,omitempty"`
+	// AccessTokenConcurrentRequests is the maximum number of concurrent requests for each access token
 	AccessTokenConcurrentRequests int `json:"access_token_concurrent_requests"`
+	// AccessTokenLimit is the maximum number of access tokens for deployments of this tier
+	AccessTokenLimit int `json:"access_token_limit"`
 }
 
 // TierInfoList represents the list of TierInfo
@@ -148,7 +188,7 @@ type DeploymentSummary struct {
 	ID string `json:"id"`
 	// Name - human-readable name of the deployment
 	Name string `json:"name"`
-	// Type of the deployment (single_node / cluster)
+	// Type of the deployment (single_node / cluster / vlogs_single / vtraces_single)
 	Type DeploymentType `json:"type"`
 	// Tier - tier identifier of the deployment
 	Tier uint32 `json:"tier"`
@@ -183,7 +223,7 @@ type DeploymentInfo struct {
 	ID string `json:"id"`
 	// Name - human-readable name of the deployment
 	Name string `json:"name"`
-	// Type of the deployment (single_node / cluster)
+	// Type of the deployment (single_node / cluster / vlogs_single / vtraces_single)
 	Type DeploymentType `json:"type"`
 	// Tier - tier identifier of the deployment
 	Tier uint32 `json:"tier"`
@@ -201,17 +241,22 @@ type DeploymentInfo struct {
 	RetentionValue uint32 `json:"retention_value"`
 	// RetentionUnit - retention period unit of the deployment
 	RetentionUnit DurationUnit `json:"retention_unit"`
-	// DeduplicationValue - deduplication period of the deployment
-	DeduplicationValue uint32 `json:"deduplication_value"`
-	// DeduplicationUnit - deduplication period unit of the deployment
-	DeduplicationUnit DurationUnit `json:"deduplication_unit"`
+	// DeduplicationValue - deduplication period of the deployment. Absent for
+	// vlogs_single and vtraces_single deployments, which have no deduplication window.
+	// A pointer, so that a metrics deployment with a zero window stays distinguishable
+	// from a deployment that has none. Use Deduplication for a safe read.
+	DeduplicationValue *uint32 `json:"deduplication_value,omitempty"`
+	// DeduplicationUnit - deduplication period unit of the deployment. Absent for
+	// vlogs_single and vtraces_single deployments.
+	DeduplicationUnit *DurationUnit `json:"deduplication_unit,omitempty"`
 	// StorageSizeGb - storage size of the deployment
 	StorageSizeGb uint64 `json:"storage_size_gb"`
 	// MaintenanceWindow - maintenance window of the deployment
 	MaintenanceWindow MaintenanceWindow `json:"maintenance_window"`
 	// Price - price of the deployment
 	Price DeploymentPrice `json:"price"`
-	// VMSingleSettings - settings for single-node deployment
+	// VMSingleSettings - settings of the single component. Used by single_node,
+	// vlogs_single and vtraces_single deployments.
 	VMSingleSettings []string `json:"vmsingle_settings,omitempty"`
 	// VMStorageSettings - VMStorage settings for cluster deployment
 	VMStorageSettings []string `json:"vmstorage_settings,omitempty"`
@@ -223,6 +268,15 @@ type DeploymentInfo struct {
 	AccessEndpoint string `json:"access_endpoint"`
 }
 
+// Deduplication reports the deduplication window of the deployment. ok is false for
+// vlogs_single and vtraces_single deployments, which have no deduplication window.
+func (d DeploymentInfo) Deduplication() (value uint32, unit DurationUnit, ok bool) {
+	if d.DeduplicationValue == nil || d.DeduplicationUnit == nil {
+		return 0, "", false
+	}
+	return *d.DeduplicationValue, *d.DeduplicationUnit, true
+}
+
 // DeploymentInfoList represents the list of DeploymentInfo
 type DeploymentInfoList []DeploymentInfo
 
@@ -230,7 +284,7 @@ type DeploymentInfoList []DeploymentInfo
 type DeploymentCreationRequest struct {
 	// Name - human-readable name of the deployment
 	Name string `json:"name"`
-	// Type of the deployment (single_node / cluster)
+	// Type of the deployment (single_node / cluster / vlogs_single / vtraces_single)
 	Type DeploymentType `json:"type"`
 	// Provider - cloud provider of the deployment
 	Provider DeploymentCloudProvider `json:"provider"`
@@ -242,9 +296,12 @@ type DeploymentCreationRequest struct {
 	StorageSize uint64 `json:"storage_size"`
 	// StorageSizeUnit - storage size unit (GB / TB)
 	StorageSizeUnit StorageUnit `json:"storage_size_unit"`
-	// Deduplication window for the deployment in units specified in DeduplicationUnit
+	// Deduplication window for the deployment in units specified in DeduplicationUnit.
+	// Required for single_node and cluster deployments. Ignored by the API for
+	// vlogs_single and vtraces_single deployments, which have no deduplication window.
 	Deduplication uint32 `json:"deduplication"`
-	// DeduplicationUnit - deduplication window unit for the deployment
+	// DeduplicationUnit - deduplication window unit for the deployment.
+	// Required for single_node and cluster deployments, ignored for vlogs_single and vtraces_single.
 	DeduplicationUnit DurationUnit `json:"deduplication_unit"`
 	// Retention period for the deployment in units specified in RetentionUnit
 	Retention uint32 `json:"retention"`
@@ -255,7 +312,7 @@ type DeploymentCreationRequest struct {
 }
 
 // DeploymentUpdateRequest represents the request for updating a deployment
-type DeploymentUpdateRequest = struct {
+type DeploymentUpdateRequest struct {
 	// Name - human-readable name of the deployment
 	Name string `json:"name"`
 	// Tier - tier identifier of the deployment
@@ -264,9 +321,12 @@ type DeploymentUpdateRequest = struct {
 	StorageSize uint64 `json:"storage_size"`
 	// StorageSizeUnit - storage size unit (GB / TB)
 	StorageSizeUnit StorageUnit `json:"storage_size_unit"`
-	// Deduplication window for the deployment in units specified in DeduplicationUnit
+	// Deduplication window for the deployment in units specified in DeduplicationUnit.
+	// Required for single_node and cluster deployments. Ignored by the API for
+	// vlogs_single and vtraces_single deployments, which have no deduplication window.
 	Deduplication uint32 `json:"deduplication"`
-	// DeduplicationUnit - deduplication window unit for the deployment
+	// DeduplicationUnit - deduplication window unit for the deployment.
+	// Required for single_node and cluster deployments, ignored for vlogs_single and vtraces_single.
 	DeduplicationUnit DurationUnit `json:"deduplication_unit"`
 	// Retention period for the deployment in units specified in RetentionUnit
 	Retention uint32 `json:"retention"`

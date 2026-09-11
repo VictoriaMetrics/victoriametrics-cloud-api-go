@@ -34,6 +34,15 @@ func main() {
 		fmt.Println()
 	}
 
+	// Example 1b: List only VictoriaLogs deployments
+	// Without a filter the API returns deployments of every type, including
+	// vlogs_single and vtraces_single.
+	vlogsDeployments, err := client.ListDeployments(ctx, vmcloud.WithDeploymentType(vmcloud.DeploymentTypeVLogs))
+	if err != nil {
+		log.Fatalf("Failed to list VictoriaLogs deployments: %v", err)
+	}
+	fmt.Printf("Found %d VictoriaLogs deployments\n\n", len(vlogsDeployments))
+
 	// Example 2: Create a new deployment
 	// Note: This is a long-running operation and will create actual resources in your account
 	// Uncomment and modify as needed
@@ -52,6 +61,11 @@ func main() {
 			DeduplicationUnit: vmcloud.DurationUnitSecond,
 			MaintenanceWindow: vmcloud.MaintenanceWindowWeekendDays, // Maintenance on weekends
 		}
+
+		// A VictoriaLogs or VictoriaTraces deployment is created the same way, with
+		// Type set to vmcloud.DeploymentTypeVLogs or vmcloud.DeploymentTypeVTraces.
+		// Those types have no deduplication window, so Deduplication and
+		// DeduplicationUnit are left unset and the API ignores them.
 
 		createdDeployment, err := client.CreateDeployment(ctx, newDeployment)
 		if err != nil {
@@ -86,7 +100,12 @@ func main() {
 	fmt.Printf("  Provider: %s, Region: %s\n", deploymentDetails.CloudProvider, deploymentDetails.Region)
 	fmt.Printf("  Storage Size: %d GB\n", deploymentDetails.StorageSizeGb)
 	fmt.Printf("  Retention: %d %s\n", deploymentDetails.RetentionValue, deploymentDetails.RetentionUnit)
-	fmt.Printf("  Deduplication: %d %s\n", deploymentDetails.DeduplicationValue, deploymentDetails.DeduplicationUnit)
+	if dedupValue, dedupUnit, ok := deploymentDetails.Deduplication(); ok {
+		fmt.Printf("  Deduplication: %d %s\n", dedupValue, dedupUnit)
+	} else {
+		// VictoriaLogs and VictoriaTraces deployments have no deduplication window
+		fmt.Printf("  Deduplication: not applicable for %s deployments\n", deploymentDetails.Type)
+	}
 	fmt.Printf("  Access Endpoint: %s\n", deploymentDetails.AccessEndpoint)
 	fmt.Println()
 

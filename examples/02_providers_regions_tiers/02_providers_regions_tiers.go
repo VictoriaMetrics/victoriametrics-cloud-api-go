@@ -46,6 +46,8 @@ func main() {
 	fmt.Println()
 
 	// Example 3: List available tiers
+	// Without a filter the API returns tiers of every deployment type: VictoriaMetrics
+	// single-node and cluster, VictoriaLogs, and VictoriaTraces where it is enabled.
 	fmt.Println("=== Available Tiers ===")
 	tiers, err := client.ListTiers(ctx)
 	if err != nil {
@@ -56,9 +58,29 @@ func main() {
 		fmt.Printf("Tier: %s (ID: %d)\n", tier.Name, tier.ID)
 		fmt.Printf("  Type: %s, Cloud Provider: %s\n", tier.Type, tier.CloudProvider)
 		fmt.Printf("  Cost per hour: $%.4f\n", tier.ComputeCostPerHour)
-		fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", tier.IngestionRate, tier.ActiveTimeSeries)
+		// the limits a tier reports depend on its type
+		switch tier.Type {
+		case v1.DeploymentTypeVLogs, v1.DeploymentTypeVTraces:
+			fmt.Printf("  Ingestion Rate: %d bytes/s, Active Streams: %d\n", tier.IngestionRateBytes, tier.ActiveLogStreams)
+			fmt.Printf("  Read Rate: %d bytes/s, Bytes per Query: %d\n", tier.DataReadRate, tier.BytesPerQuery)
+		default:
+			fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", tier.IngestionRate, tier.ActiveTimeSeries)
+			fmt.Printf("  Read Rate: %d, Series per Query: %d\n", tier.DatapointsReadRate, tier.SeriesReadPerQuery)
+		}
 		fmt.Println()
 	}
+
+	// Example 3b: List only the VictoriaLogs tiers
+	fmt.Println("=== VictoriaLogs Tiers ===")
+	vlogsTiers, err := client.ListTiers(ctx, v1.WithDeploymentType(v1.DeploymentTypeVLogs))
+	if err != nil {
+		log.Fatalf("Failed to list VictoriaLogs tiers: %v", err)
+	}
+
+	for _, tier := range vlogsTiers {
+		fmt.Printf("Tier: %s (ID: %d), cost per hour: $%.4f\n", tier.Name, tier.ID, tier.ComputeCostPerHour)
+	}
+	fmt.Println()
 
 	// Example 4: Find a specific tier by ID
 	fmt.Println("=== Finding a Specific Tier ===")

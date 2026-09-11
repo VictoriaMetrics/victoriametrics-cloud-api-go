@@ -27,7 +27,12 @@ func isValidTenantID(tenantID string) bool {
 	return tenantIDRegex.MatchString(tenantID)
 }
 
-// validateCommonDeploymentParams validates parameters common to both create and update operations
+// validateCommonDeploymentParams validates parameters common to both create and update operations.
+//
+// Storage size is only checked for a unit and a non-zero value. The valid range and the
+// step it must sit on depend on the storage type, the deployment topology and the
+// per-installation configuration, none of which the client can see, so the API is the
+// authority on them.
 func validateCommonDeploymentParams(
 	name string,
 	tier uint32,
@@ -36,7 +41,6 @@ func validateCommonDeploymentParams(
 	storageSizeUnit StorageUnit,
 	retention uint32,
 	retentionUnit DurationUnit,
-	deduplicationUnit DurationUnit,
 ) error {
 	if name == "" {
 		return fmt.Errorf("deployment name cannot be empty")
@@ -60,10 +64,51 @@ func validateCommonDeploymentParams(
 	if retentionUnit != DurationUnitDay && retentionUnit != DurationUnitMonth {
 		return fmt.Errorf("invalid retention unit: %s, only days and months are supported", retentionUnit)
 	}
-	if deduplicationUnit != DurationUnitSecond && deduplicationUnit != DurationUnitMillisecond {
+	return nil
+}
+
+// isValidDeduplicationUnit reports whether unit is a unit the API accepts for a
+// deduplication window.
+func isValidDeduplicationUnit(unit DurationUnit) bool {
+	return unit == DurationUnitSecond || unit == DurationUnitMillisecond
+}
+
+// validateDeduplicationForCreate checks the deduplication window of a create request.
+// The deployment type is known here, so the rule is exact: metrics deployments must
+// carry a unit, and for the other types the API ignores both fields.
+func validateDeduplicationForCreate(deploymentType DeploymentType, deduplicationUnit DurationUnit) error {
+	if !deploymentType.SupportsDeduplication() {
+		return nil
+	}
+	if !isValidDeduplicationUnit(deduplicationUnit) {
 		return fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", deduplicationUnit)
 	}
 	return nil
+}
+
+// validateDeduplicationForUpdate checks the deduplication window of an update request.
+// An update request does not carry the deployment type, so a request that leaves both
+// deduplication fields unset is taken as one for a deployment that has no deduplication
+// window, and the API rejects it if the deployment is a metrics one. A request that sets
+// either field is validated as a metrics one.
+func validateDeduplicationForUpdate(deduplication uint32, deduplicationUnit DurationUnit) error {
+	if deduplication == 0 && deduplicationUnit == "" {
+		return nil
+	}
+	if !isValidDeduplicationUnit(deduplicationUnit) {
+		return fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", deduplicationUnit)
+	}
+	return nil
+}
+
+// isValidDeploymentType reports whether deploymentType is a type the API can create.
+func isValidDeploymentType(deploymentType DeploymentType) bool {
+	switch deploymentType {
+	case DeploymentTypeSingleNode, DeploymentTypeCluster, DeploymentTypeVLogs, DeploymentTypeVTraces:
+		return true
+	default:
+		return false
+	}
 }
 
 // validateCreateDeploymentParams validates parameters specific to deployment creation
@@ -71,10 +116,8 @@ func validateCreateDeploymentParams(
 	deploymentType DeploymentType,
 	region string,
 	provider DeploymentCloudProvider,
-	deploymentStorageSize uint64,
-	storageSizeUnit StorageUnit,
 ) error {
-	if deploymentType != DeploymentTypeSingleNode && deploymentType != DeploymentTypeCluster {
+	if !isValidDeploymentType(deploymentType) {
 		return fmt.Errorf("invalid deployment type: %s", deploymentType)
 	}
 	if region == "" {
@@ -82,10 +125,6 @@ func validateCreateDeploymentParams(
 	}
 	if provider != DeploymentCloudProviderAWS {
 		return fmt.Errorf("unsupported deployment cloud provider: %s", provider)
-	}
-	if deploymentType == DeploymentTypeSingleNode &&
-		storageSizeUnit == StorageUnitTB && deploymentStorageSize > 16 {
-		return fmt.Errorf("single-node deployments cannot have more than 16 TB of storage")
 	}
 	return nil
 }

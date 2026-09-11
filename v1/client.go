@@ -84,14 +84,56 @@ func (a *VMCloudAPIClient) ListRegions(ctx context.Context) (RegionInfoList, err
 	return requestAPI[RegionInfoList](ctx, a, http.MethodGet, nil, "/api/v1/regions")
 }
 
-// ListTiers retrieves the list of available instance tiers for deployments in VictoriaMetrics Cloud.
-func (a *VMCloudAPIClient) ListTiers(ctx context.Context) (TierInfoList, error) {
-	return requestAPI[TierInfoList](ctx, a, http.MethodGet, nil, "/api/v1/tiers")
+// listOptions holds the filters of a list request.
+type listOptions struct {
+	deploymentType DeploymentType
 }
 
-// ListDeployments retrieves a list of deployment summaries from for the current account (API Key) in the VictoriaMetrics Cloud API.
-func (a *VMCloudAPIClient) ListDeployments(ctx context.Context) (DeploymentSummaryList, error) {
-	return requestAPI[DeploymentSummaryList](ctx, a, http.MethodGet, nil, "/api/v1/deployments")
+// ListOption defines a functional option that filters the result of a list request.
+type ListOption func(*listOptions)
+
+// WithDeploymentType restricts a list request to a single deployment type.
+// Without it the API returns entries of every deployment type.
+func WithDeploymentType(deploymentType DeploymentType) ListOption {
+	return func(o *listOptions) {
+		o.deploymentType = deploymentType
+	}
+}
+
+// listQuery turns the options into query parameters, rejecting a type the API does not know.
+func listQuery(options []ListOption) (url.Values, error) {
+	var o listOptions
+	for _, option := range options {
+		option(&o)
+	}
+	query := url.Values{}
+	if o.deploymentType != "" {
+		if !isValidDeploymentType(o.deploymentType) {
+			return nil, fmt.Errorf("invalid deployment type: %s", o.deploymentType)
+		}
+		query.Set("type", o.deploymentType.String())
+	}
+	return query, nil
+}
+
+// ListTiers retrieves the list of available tiers for deployments in VictoriaMetrics Cloud.
+// Tiers of every deployment type are returned unless WithDeploymentType narrows the request.
+func (a *VMCloudAPIClient) ListTiers(ctx context.Context, options ...ListOption) (TierInfoList, error) {
+	query, err := listQuery(options)
+	if err != nil {
+		return nil, err
+	}
+	return requestAPIWithQuery[TierInfoList](ctx, a, http.MethodGet, nil, query, "/api/v1/tiers")
+}
+
+// ListDeployments retrieves a list of deployment summaries for the current account (API Key) in the VictoriaMetrics Cloud API.
+// Deployments of every type are returned unless WithDeploymentType narrows the request.
+func (a *VMCloudAPIClient) ListDeployments(ctx context.Context, options ...ListOption) (DeploymentSummaryList, error) {
+	query, err := listQuery(options)
+	if err != nil {
+		return nil, err
+	}
+	return requestAPIWithQuery[DeploymentSummaryList](ctx, a, http.MethodGet, nil, query, "/api/v1/deployments")
 }
 
 // GetDeploymentDetails retrieves detailed information about a specific deployment using its deployment ID.
@@ -113,7 +155,6 @@ func (a *VMCloudAPIClient) CreateDeployment(ctx context.Context, deployment Depl
 		deployment.StorageSizeUnit,
 		deployment.Retention,
 		deployment.RetentionUnit,
-		deployment.DeduplicationUnit,
 	)
 	if err != nil {
 		return DeploymentInfo{}, err
@@ -124,10 +165,12 @@ func (a *VMCloudAPIClient) CreateDeployment(ctx context.Context, deployment Depl
 		deployment.Type,
 		deployment.Region,
 		deployment.Provider,
-		deployment.StorageSize,
-		deployment.StorageSizeUnit,
 	)
 	if err != nil {
+		return DeploymentInfo{}, err
+	}
+
+	if err := validateDeduplicationForCreate(deployment.Type, deployment.DeduplicationUnit); err != nil {
 		return DeploymentInfo{}, err
 	}
 
@@ -153,9 +196,12 @@ func (a *VMCloudAPIClient) UpdateDeployment(ctx context.Context, deploymentID st
 		deployment.StorageSizeUnit,
 		deployment.Retention,
 		deployment.RetentionUnit,
-		deployment.DeduplicationUnit,
 	)
 	if err != nil {
+		return DeploymentInfo{}, err
+	}
+
+	if err := validateDeduplicationForUpdate(deployment.Deduplication, deployment.DeduplicationUnit); err != nil {
 		return DeploymentInfo{}, err
 	}
 
