@@ -1,3 +1,3 @@
 module github.com/VictoriaMetrics/victoriametrics-cloud-api-go
 
-go 1.26
+go 1.26.7

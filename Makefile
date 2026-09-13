@@ -1,4 +1,4 @@
-GOLANGCI_LINT_VERSION := 2.12.2
+GOLANGCI_LINT_VERSION := 2.13.2
 
 fmt:
 	gofmt -l -w -s ./v1
