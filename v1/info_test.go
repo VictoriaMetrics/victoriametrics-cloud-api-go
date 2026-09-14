@@ -93,22 +93,30 @@ func TestListTiers(t *testing.T) {
 	// Create a sample response
 	tiers := TierInfoList{
 		{
-			ID:                 21,
-			Type:               DeploymentTypeSingleNode,
-			CloudProvider:      DeploymentCloudProviderAWS,
-			Name:               "s.small.a",
-			ComputeCostPerHour: 0.1,
-			IngestionRate:      10000,
-			ActiveTimeSeries:   100000,
+			TierInfoCommon: TierInfoCommon{
+				ID:                 21,
+				Type:               DeploymentTypeSingleNode,
+				CloudProvider:      DeploymentCloudProviderAWS,
+				Name:               "s.small.a",
+				ComputeCostPerHour: 0.1,
+			},
+			Metrics: &MetricsTierInfo{
+				IngestionRate:    10000,
+				ActiveTimeSeries: 100000,
+			},
 		},
 		{
-			ID:                 22,
-			Type:               DeploymentTypeSingleNode,
-			CloudProvider:      DeploymentCloudProviderAWS,
-			Name:               "s.medium.a",
-			ComputeCostPerHour: 0.2,
-			IngestionRate:      20000,
-			ActiveTimeSeries:   200000,
+			TierInfoCommon: TierInfoCommon{
+				ID:                 22,
+				Type:               DeploymentTypeSingleNode,
+				CloudProvider:      DeploymentCloudProviderAWS,
+				Name:               "s.medium.a",
+				ComputeCostPerHour: 0.2,
+			},
+			Metrics: &MetricsTierInfo{
+				IngestionRate:    20000,
+				ActiveTimeSeries: 200000,
+			},
 		},
 	}
 
@@ -148,5 +156,20 @@ func TestListTiers(t *testing.T) {
 	}
 	if result[0].ComputeCostPerHour != tiers[0].ComputeCostPerHour {
 		t.Errorf("ListTiers() first tier ComputeCostPerHour = %f, want %f", result[0].ComputeCostPerHour, tiers[0].ComputeCostPerHour)
+	}
+
+	// a metrics tier carries its limits in Metrics and leaves the other two nil
+	metrics := result[0].Metrics
+	if metrics == nil {
+		t.Fatalf("ListTiers() first tier Metrics = nil, want the metrics limits")
+	}
+	if metrics.IngestionRate != tiers[0].Metrics.IngestionRate {
+		t.Errorf("ListTiers() first tier IngestionRate = %d, want %d", metrics.IngestionRate, tiers[0].Metrics.IngestionRate)
+	}
+	if metrics.ActiveTimeSeries != tiers[0].Metrics.ActiveTimeSeries {
+		t.Errorf("ListTiers() first tier ActiveTimeSeries = %d, want %d", metrics.ActiveTimeSeries, tiers[0].Metrics.ActiveTimeSeries)
+	}
+	if result[0].Logs != nil || result[0].Traces != nil {
+		t.Errorf("ListTiers() first tier reported logs/traces limits, want neither")
 	}
 }

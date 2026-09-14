@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"encoding/json"
+	"maps"
 	"time"
 )
 
@@ -131,13 +133,8 @@ func (u StorageUnit) String() string {
 	return string(u)
 }
 
-// TierInfo represents the information about the tier in public VMCloud API.
-//
-// The limit fields a tier reports depend on its Type: single_node and cluster tiers
-// report the time series limits, vlogs_single and vtraces_single tiers report the
-// byte and stream limits. Fields that do not apply to a tier are absent from the
-// response and stay at zero.
-type TierInfo struct {
+// TierInfoCommon holds the fields every tier reports, regardless of its deployment type.
+type TierInfoCommon struct {
 	// ID is the unique identifier of the tier of given type
 	ID uint32 `json:"id"`
 	// Type of the deployment (single_node / cluster / vlogs_single / vtraces_single)
@@ -148,35 +145,154 @@ type TierInfo struct {
 	Name string `json:"name"`
 	// ComputeCostPerHour is the cost of the deployment per hour
 	ComputeCostPerHour float64 `json:"compute_cost_per_hour"`
-	// IngestionRate is the maximum ingestion rate of the tier, metrics tiers only
-	IngestionRate int `json:"ingestion_rate,omitempty"`
-	// ActiveTimeSeries is the maximum number of active time series of the tier, metrics tiers only
-	ActiveTimeSeries int `json:"active_time_series,omitempty"`
-	// NewSeriesOver24h is the maximum number of new series over 24 hours of the tier, metrics tiers only
-	NewSeriesOver24h int `json:"new_series_over_24h,omitempty"`
-	// DatapointsReadRate is the maximum read rate of the tier, metrics tiers only
-	DatapointsReadRate int `json:"datapoints_read_rate,omitempty"`
-	// SeriesReadPerQuery is the maximum number of series read per query of the tier, metrics tiers only
-	SeriesReadPerQuery int `json:"series_read_per_query,omitempty"`
-	// IngestionRateBytes is the maximum ingestion rate in bytes per second,
-	// vlogs_single and vtraces_single tiers only
-	IngestionRateBytes int `json:"ingestion_rate_bytes,omitempty"`
-	// ActiveLogStreams is the maximum number of active streams of the tier,
-	// vlogs_single and vtraces_single tiers only
-	ActiveLogStreams int `json:"active_log_streams,omitempty"`
-	// NewStreamsOver24h is the maximum number of new streams over 24 hours of the tier,
-	// vlogs_single and vtraces_single tiers only
-	NewStreamsOver24h int `json:"new_streams_over_24h,omitempty"`
-	// DataReadRate is the maximum read rate in bytes per second of the tier,
-	// vlogs_single and vtraces_single tiers only
-	DataReadRate int `json:"data_read_rate,omitempty"`
-	// BytesPerQuery is the maximum number of bytes scanned per query,
-	// vlogs_single and vtraces_single tiers only
-	BytesPerQuery int `json:"bytes_per_query,omitempty"`
 	// AccessTokenConcurrentRequests is the maximum number of concurrent requests for each access token
 	AccessTokenConcurrentRequests int `json:"access_token_concurrent_requests"`
 	// AccessTokenLimit is the maximum number of access tokens for deployments of this tier
 	AccessTokenLimit int `json:"access_token_limit"`
+}
+
+// MetricsTierInfo holds the limits reported by single_node and cluster tiers.
+type MetricsTierInfo struct {
+	// IngestionRate is the maximum ingestion rate of the tier
+	IngestionRate int `json:"ingestion_rate"`
+	// ActiveTimeSeries is the maximum number of active time series of the tier
+	ActiveTimeSeries int `json:"active_time_series"`
+	// NewSeriesOver24h is the maximum number of new series over 24 hours of the tier
+	NewSeriesOver24h int `json:"new_series_over_24h"`
+	// DatapointsReadRate is the maximum read rate of the tier
+	DatapointsReadRate int `json:"datapoints_read_rate"`
+	// SeriesReadPerQuery is the maximum number of series read per query of the tier
+	SeriesReadPerQuery int `json:"series_read_per_query"`
+}
+
+// LogsTierInfo holds the limits reported by vlogs_single tiers.
+//
+// The byte-valued limits are int64 rather than int: a tier can report more than 2 GB,
+// which does not fit in a 32-bit int and would fail to decode on 32-bit targets.
+type LogsTierInfo struct {
+	// IngestionRateBytes is the maximum ingestion rate in bytes per second
+	IngestionRateBytes int64 `json:"ingestion_rate_bytes"`
+	// ActiveLogStreams is the maximum number of active log streams of the tier
+	ActiveLogStreams int `json:"active_log_streams"`
+	// NewStreamsOver24h is the maximum number of new log streams over 24 hours of the tier
+	NewStreamsOver24h int `json:"new_streams_over_24h"`
+	// DataReadRate is the maximum read rate in bytes per second of the tier
+	DataReadRate int64 `json:"data_read_rate"`
+	// BytesPerQuery is the maximum number of bytes scanned per query
+	BytesPerQuery int64 `json:"bytes_per_query"`
+}
+
+// TracesTierInfo holds the limits reported by vtraces_single tiers.
+//
+// The JSON keys match the vlogs_single ones, since VictoriaTraces reports its limits
+// in terms of log streams as well. The type is kept separate so that the two can
+// diverge without breaking callers.
+//
+// The byte-valued limits are int64, for the same reason as LogsTierInfo.
+type TracesTierInfo struct {
+	// IngestionRateBytes is the maximum ingestion rate in bytes per second
+	IngestionRateBytes int64 `json:"ingestion_rate_bytes"`
+	// ActiveLogStreams is the maximum number of active log streams of the tier
+	ActiveLogStreams int `json:"active_log_streams"`
+	// NewStreamsOver24h is the maximum number of new log streams over 24 hours of the tier
+	NewStreamsOver24h int `json:"new_streams_over_24h"`
+	// DataReadRate is the maximum read rate in bytes per second of the tier
+	DataReadRate int64 `json:"data_read_rate"`
+	// BytesPerQuery is the maximum number of bytes scanned per query
+	BytesPerQuery int64 `json:"bytes_per_query"`
+}
+
+// TierInfo represents the information about the tier in public VMCloud API.
+//
+// The limits a tier reports depend on its Type, so they live in a dedicated struct
+// per deployment type. At most one of Metrics, Logs and Traces is set: single_node
+// and cluster tiers fill Metrics, vlogs_single tiers fill Logs and vtraces_single
+// tiers fill Traces. The other two stay nil, and a tier of a type this version of
+// the SDK does not know leaves all three nil rather than guessing.
+//
+// Type is the single discriminator: both UnmarshalJSON and MarshalJSON pick the
+// limit struct from it, so a limit struct that does not match Type is not written.
+type TierInfo struct {
+	TierInfoCommon
+	// Metrics holds the limits of single_node and cluster tiers, nil for other types
+	Metrics *MetricsTierInfo `json:"-"`
+	// Logs holds the limits of vlogs_single tiers, nil for other types
+	Logs *LogsTierInfo `json:"-"`
+	// Traces holds the limits of vtraces_single tiers, nil for other types
+	Traces *TracesTierInfo `json:"-"`
+}
+
+// UnmarshalJSON decodes a tier into its common fields plus the limit struct its Type
+// calls for. A type this version of the SDK does not know leaves all three limit
+// structs nil, so that a new deployment type is not mistaken for a metrics tier.
+func (t *TierInfo) UnmarshalJSON(data []byte) error {
+	t.TierInfoCommon = TierInfoCommon{}
+	t.Metrics, t.Logs, t.Traces = nil, nil, nil
+
+	if err := json.Unmarshal(data, &t.TierInfoCommon); err != nil {
+		return err
+	}
+	switch t.Type {
+	case DeploymentTypeSingleNode, DeploymentTypeCluster:
+		var limits MetricsTierInfo
+		if err := json.Unmarshal(data, &limits); err != nil {
+			return err
+		}
+		t.Metrics = &limits
+	case DeploymentTypeVLogs:
+		var limits LogsTierInfo
+		if err := json.Unmarshal(data, &limits); err != nil {
+			return err
+		}
+		t.Logs = &limits
+	case DeploymentTypeVTraces:
+		var limits TracesTierInfo
+		if err := json.Unmarshal(data, &limits); err != nil {
+			return err
+		}
+		t.Traces = &limits
+	}
+	return nil
+}
+
+// MarshalJSON encodes a tier back into the flat object the API returns. It selects the
+// limit struct by Type, mirroring UnmarshalJSON, so that the two stay symmetric even
+// when a caller has filled in a limit struct that does not match Type.
+//
+// The receiver is deliberately a value, mirroring time.Time and net.IP: encoding/json
+// only reaches a pointer-receiver MarshalJSON when the tier is addressable, so a
+// pointer receiver here would make json.Marshal(tier) drop every limit without an
+// error. TestTierInfoMarshalValue guards that.
+func (t TierInfo) MarshalJSON() ([]byte, error) {
+	parts := []any{t.TierInfoCommon}
+	switch t.Type {
+	case DeploymentTypeSingleNode, DeploymentTypeCluster:
+		if t.Metrics != nil {
+			parts = append(parts, t.Metrics)
+		}
+	case DeploymentTypeVLogs:
+		if t.Logs != nil {
+			parts = append(parts, t.Logs)
+		}
+	case DeploymentTypeVTraces:
+		if t.Traces != nil {
+			parts = append(parts, t.Traces)
+		}
+	}
+
+	fields := map[string]json.RawMessage{}
+	for _, part := range parts {
+		encoded, err := json.Marshal(part)
+		if err != nil {
+			return nil, err
+		}
+		var partFields map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &partFields); err != nil {
+			return nil, err
+		}
+		maps.Copy(fields, partFields)
+	}
+	return json.Marshal(fields)
 }
 
 // TierInfoList represents the list of TierInfo
@@ -269,8 +385,17 @@ type DeploymentInfo struct {
 }
 
 // Deduplication reports the deduplication window of the deployment. ok is false for
-// vlogs_single and vtraces_single deployments, which have no deduplication window.
+// vlogs_single and vtraces_single deployments, which have no deduplication window, and for
+// a response that does not carry both fields.
+//
+// Type decides whether a window applies at all, rather than the two fields being present:
+// a response that spells the absent window out as an explicit zero and an empty unit still
+// reports ok false for a type that has no window.
 func (d DeploymentInfo) Deduplication() (value uint32, unit DurationUnit, ok bool) {
+	switch d.Type {
+	case DeploymentTypeVLogs, DeploymentTypeVTraces:
+		return 0, "", false
+	}
 	if d.DeduplicationValue == nil || d.DeduplicationUnit == nil {
 		return 0, "", false
 	}
@@ -297,12 +422,14 @@ type DeploymentCreationRequest struct {
 	// StorageSizeUnit - storage size unit (GB / TB)
 	StorageSizeUnit StorageUnit `json:"storage_size_unit"`
 	// Deduplication window for the deployment in units specified in DeduplicationUnit.
-	// Required for single_node and cluster deployments. Ignored by the API for
-	// vlogs_single and vtraces_single deployments, which have no deduplication window.
-	Deduplication uint32 `json:"deduplication"`
-	// DeduplicationUnit - deduplication window unit for the deployment.
-	// Required for single_node and cluster deployments, ignored for vlogs_single and vtraces_single.
-	DeduplicationUnit DurationUnit `json:"deduplication_unit"`
+	// Required for single_node and cluster deployments, where a zero window is a valid
+	// setting distinct from having none: write new(uint32(0)) to send one. Leave it nil
+	// for vlogs_single and vtraces_single, which have no deduplication window; setting it
+	// for those types is rejected rather than quietly dropped.
+	Deduplication *uint32 `json:"deduplication,omitempty"`
+	// DeduplicationUnit - deduplication window unit for the deployment. Set it together
+	// with Deduplication; nil for the types that have no deduplication window.
+	DeduplicationUnit *DurationUnit `json:"deduplication_unit,omitempty"`
 	// Retention period for the deployment in units specified in RetentionUnit
 	Retention uint32 `json:"retention"`
 	// RetentionUnit - retention period unit for the deployment
@@ -322,12 +449,17 @@ type DeploymentUpdateRequest struct {
 	// StorageSizeUnit - storage size unit (GB / TB)
 	StorageSizeUnit StorageUnit `json:"storage_size_unit"`
 	// Deduplication window for the deployment in units specified in DeduplicationUnit.
-	// Required for single_node and cluster deployments. Ignored by the API for
-	// vlogs_single and vtraces_single deployments, which have no deduplication window.
-	Deduplication uint32 `json:"deduplication"`
-	// DeduplicationUnit - deduplication window unit for the deployment.
-	// Required for single_node and cluster deployments, ignored for vlogs_single and vtraces_single.
-	DeduplicationUnit DurationUnit `json:"deduplication_unit"`
+	// An update body carries no deployment type, so nil is what carries the meaning here:
+	// it leaves the deployment's current window untouched, which is what a vlogs_single or
+	// vtraces_single update needs - those types have no window - and what a metrics update
+	// that is not changing deduplication needs too. Set it together with DeduplicationUnit
+	// to change the window; a zero window is a valid setting and is sent as such.
+	// Use new(uint32(10)) to take the address of a literal.
+	Deduplication *uint32 `json:"deduplication,omitempty"`
+	// DeduplicationUnit - deduplication window unit for the deployment. Set it together
+	// with Deduplication; nil leaves the current unit untouched.
+	// Use new(DurationUnitSecond) to take the address of a literal.
+	DeduplicationUnit *DurationUnit `json:"deduplication_unit,omitempty"`
 	// Retention period for the deployment in units specified in RetentionUnit
 	Retention uint32 `json:"retention"`
 	// RetentionUnit - retention period unit for the deployment

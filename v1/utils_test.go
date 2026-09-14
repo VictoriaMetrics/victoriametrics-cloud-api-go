@@ -220,8 +220,3 @@ func TestIsValidTenantID(t *testing.T) {
 		})
 	}
 }
-
-// ptrTo returns a pointer to v, for building the optional fields of API responses.
-func ptrTo[T any](v T) *T {
-	return &v
-}

@@ -57,8 +57,8 @@ func main() {
 			StorageSizeUnit:   vmcloud.StorageUnitGB,
 			Retention:         30, // 30 days retention
 			RetentionUnit:     vmcloud.DurationUnitDay,
-			Deduplication:     10, // 10 seconds deduplication
-			DeduplicationUnit: vmcloud.DurationUnitSecond,
+			Deduplication:     new(uint32(10)), // 10 seconds deduplication
+			DeduplicationUnit: new(vmcloud.DurationUnitSecond),
 			MaintenanceWindow: vmcloud.MaintenanceWindowWeekendDays, // Maintenance on weekends
 		}
 
@@ -100,11 +100,15 @@ func main() {
 	fmt.Printf("  Provider: %s, Region: %s\n", deploymentDetails.CloudProvider, deploymentDetails.Region)
 	fmt.Printf("  Storage Size: %d GB\n", deploymentDetails.StorageSizeGb)
 	fmt.Printf("  Retention: %d %s\n", deploymentDetails.RetentionValue, deploymentDetails.RetentionUnit)
-	if dedupValue, dedupUnit, ok := deploymentDetails.Deduplication(); ok {
+	switch dedupValue, dedupUnit, ok := deploymentDetails.Deduplication(); {
+	case ok:
 		fmt.Printf("  Deduplication: %d %s\n", dedupValue, dedupUnit)
-	} else {
+	case !deploymentDetails.Type.SupportsDeduplication():
 		// VictoriaLogs and VictoriaTraces deployments have no deduplication window
 		fmt.Printf("  Deduplication: not applicable for %s deployments\n", deploymentDetails.Type)
+	default:
+		// the type has a window, but the response did not carry both fields
+		fmt.Println("  Deduplication: not reported")
 	}
 	fmt.Printf("  Access Endpoint: %s\n", deploymentDetails.AccessEndpoint)
 	fmt.Println()
@@ -120,10 +124,15 @@ func main() {
 			StorageSizeUnit:   vmcloud.StorageUnitGB,
 			Retention:         60, // Increase retention
 			RetentionUnit:     vmcloud.DurationUnitDay,
-			Deduplication:     10, // Keep deduplication the same
-			DeduplicationUnit: vmcloud.DurationUnitSecond,
+			Deduplication:     new(uint32(10)), // Keep deduplication the same
+			DeduplicationUnit: new(vmcloud.DurationUnitSecond),
 			MaintenanceWindow: vmcloud.MaintenanceWindowBusinessDays, // Change maintenance window to business days
 		}
+
+		// Updating a VictoriaLogs or VictoriaTraces deployment is the same call with both
+		// Deduplication fields left nil - those types have no deduplication window. nil
+		// also means "leave the window alone" for a metrics deployment, so an update that
+		// is not changing deduplication simply omits both fields.
 
 		updatedDeployment, err := client.UpdateDeployment(ctx, deploymentID, updateRequest)
 		if err != nil {
@@ -134,7 +143,16 @@ func main() {
 		fmt.Printf("  New Tier: %d\n", updatedDeployment.Tier)
 		fmt.Printf("  New Storage Size: %d GB\n", updatedDeployment.StorageSizeGb)
 		fmt.Printf("  New Retention: %d %s\n", updatedDeployment.RetentionValue, updatedDeployment.RetentionUnit)
-		fmt.Printf("  New Deduplication: %d %s\n", updatedDeployment.DeduplicationValue, updatedDeployment.DeduplicationUnit)
+		switch dedupValue, dedupUnit, ok := updatedDeployment.Deduplication(); {
+		case ok:
+			fmt.Printf("  New Deduplication: %d %s\n", dedupValue, dedupUnit)
+		case !updatedDeployment.Type.SupportsDeduplication():
+			// VictoriaLogs and VictoriaTraces deployments have no deduplication window
+			fmt.Printf("  New Deduplication: not applicable for %s deployments\n", updatedDeployment.Type)
+		default:
+			// the type has a window, but the response did not carry both fields
+			fmt.Println("  New Deduplication: not reported")
+		}
 		fmt.Printf("  New Maintenance Window: %s\n", updatedDeployment.MaintenanceWindow)
 		fmt.Println()
 	*/

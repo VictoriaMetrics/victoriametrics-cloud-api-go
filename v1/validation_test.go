@@ -230,68 +230,104 @@ func TestValidateDeduplicationForCreate(t *testing.T) {
 	tests := []struct {
 		name              string
 		deploymentType    DeploymentType
-		deduplicationUnit DurationUnit
+		deduplication     *uint32
+		deduplicationUnit *DurationUnit
 		wantErr           bool
 		errContains       string
 	}{
 		{
 			name:              "Seconds for single node",
 			deploymentType:    DeploymentTypeSingleNode,
-			deduplicationUnit: DurationUnitSecond,
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: new(DurationUnitSecond),
 			wantErr:           false,
 		},
 		{
 			name:              "Milliseconds for cluster",
 			deploymentType:    DeploymentTypeCluster,
-			deduplicationUnit: DurationUnitMillisecond,
+			deduplication:     new(uint32(500)),
+			deduplicationUnit: new(DurationUnitMillisecond),
+			wantErr:           false,
+		},
+		{
+			// a zero window is a real setting, distinct from having no window at all
+			name:              "Zero window for single node",
+			deploymentType:    DeploymentTypeSingleNode,
+			deduplication:     new(uint32(0)),
+			deduplicationUnit: new(DurationUnitSecond),
 			wantErr:           false,
 		},
 		{
 			name:              "Invalid unit for cluster",
 			deploymentType:    DeploymentTypeCluster,
-			deduplicationUnit: "invalid-unit",
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: new(DurationUnit("invalid-unit")),
 			wantErr:           true,
 			errContains:       "invalid deduplication unit",
 		},
 		{
 			name:              "Days are not a deduplication unit",
 			deploymentType:    DeploymentTypeSingleNode,
-			deduplicationUnit: DurationUnitDay,
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: new(DurationUnitDay),
 			wantErr:           true,
 			errContains:       "invalid deduplication unit",
 		},
 		{
-			name:              "Missing unit for single node",
+			name:              "Window without a unit for single node",
 			deploymentType:    DeploymentTypeSingleNode,
-			deduplicationUnit: "",
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: nil,
 			wantErr:           true,
-			errContains:       "invalid deduplication unit",
+			errContains:       "must be set together",
 		},
 		{
-			// VictoriaLogs has no deduplication window, and the API ignores the field
-			name:              "Missing unit for VictoriaLogs",
+			name:              "Unit without a window for single node",
+			deploymentType:    DeploymentTypeSingleNode,
+			deduplication:     nil,
+			deduplicationUnit: new(DurationUnitSecond),
+			wantErr:           true,
+			errContains:       "must be set together",
+		},
+		{
+			name:           "Nothing set for single node",
+			deploymentType: DeploymentTypeSingleNode,
+			wantErr:        true,
+			errContains:    "must be set together",
+		},
+		{
+			// VictoriaLogs has no deduplication window, so leaving it unset is the norm
+			name:           "Nothing set for VictoriaLogs",
+			deploymentType: DeploymentTypeVLogs,
+			wantErr:        false,
+		},
+		{
+			name:           "Nothing set for VictoriaTraces",
+			deploymentType: DeploymentTypeVTraces,
+			wantErr:        false,
+		},
+		{
+			// setting a window on a type that has none is a caller mistake, and saying so
+			// beats dropping it silently on the way to the API
+			name:              "Window set for VictoriaLogs",
 			deploymentType:    DeploymentTypeVLogs,
-			deduplicationUnit: "",
-			wantErr:           false,
+			deduplication:     new(uint32(10)),
+			deduplicationUnit: new(DurationUnitSecond),
+			wantErr:           true,
+			errContains:       "not supported for vlogs_single deployments",
 		},
 		{
-			name:              "Missing unit for VictoriaTraces",
+			name:              "Unit alone set for VictoriaTraces",
 			deploymentType:    DeploymentTypeVTraces,
-			deduplicationUnit: "",
-			wantErr:           false,
-		},
-		{
-			// the API ignores it rather than rejecting it, so neither does the client
-			name:              "Invalid unit for VictoriaLogs is ignored",
-			deploymentType:    DeploymentTypeVLogs,
-			deduplicationUnit: "invalid-unit",
-			wantErr:           false,
+			deduplicationUnit: new(DurationUnitSecond),
+			wantErr:           true,
+			errContains:       "not supported for vtraces_single deployments",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateDeduplicationForCreate(tt.deploymentType, tt.deduplicationUnit)
+			err := validateDeduplicationForCreate(tt.deploymentType, tt.deduplication, tt.deduplicationUnit)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateDeduplicationForCreate() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -308,42 +344,58 @@ func TestValidateDeduplicationForCreate(t *testing.T) {
 func TestValidateDeduplicationForUpdate(t *testing.T) {
 	tests := []struct {
 		name              string
-		deduplication     uint32
-		deduplicationUnit DurationUnit
+		deduplication     *uint32
+		deduplicationUnit *DurationUnit
 		wantErr           bool
 		errContains       string
 	}{
 		{
 			name:              "Valid window",
-			deduplication:     30,
-			deduplicationUnit: DurationUnitSecond,
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: new(DurationUnitSecond),
 			wantErr:           false,
 		},
 		{
-			// a metrics deployment may legitimately deduplicate over a zero window
-			name:              "Zero window with a unit",
-			deduplication:     0,
-			deduplicationUnit: DurationUnitSecond,
+			// the case a plain uint32 could not express: zero is a real window, and with a
+			// pointer it stays distinct from "not changing the window"
+			name:              "Zero window",
+			deduplication:     new(uint32(0)),
+			deduplicationUnit: new(DurationUnitMillisecond),
 			wantErr:           false,
 		},
 		{
-			// an update of a VictoriaLogs or VictoriaTraces deployment leaves both unset
-			name:              "Both fields unset",
-			deduplication:     0,
-			deduplicationUnit: "",
+			// an update that is not touching deduplication, including every vlogs_single
+			// and vtraces_single update
+			name:              "Both unset leaves the window alone",
+			deduplication:     nil,
+			deduplicationUnit: nil,
 			wantErr:           false,
+		},
+		{
+			name:              "Window without a unit",
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: nil,
+			wantErr:           true,
+			errContains:       "must be set together",
+		},
+		{
+			name:              "Unit without a window",
+			deduplication:     nil,
+			deduplicationUnit: new(DurationUnitSecond),
+			wantErr:           true,
+			errContains:       "must be set together",
 		},
 		{
 			name:              "Invalid unit",
-			deduplication:     30,
-			deduplicationUnit: "invalid-unit",
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: new(DurationUnit("invalid-unit")),
 			wantErr:           true,
 			errContains:       "invalid deduplication unit",
 		},
 		{
-			name:              "Window without a unit",
-			deduplication:     30,
-			deduplicationUnit: "",
+			name:              "Days are not a deduplication unit",
+			deduplication:     new(uint32(30)),
+			deduplicationUnit: new(DurationUnitDay),
 			wantErr:           true,
 			errContains:       "invalid deduplication unit",
 		},

@@ -58,14 +58,18 @@ func main() {
 		fmt.Printf("Tier: %s (ID: %d)\n", tier.Name, tier.ID)
 		fmt.Printf("  Type: %s, Cloud Provider: %s\n", tier.Type, tier.CloudProvider)
 		fmt.Printf("  Cost per hour: $%.4f\n", tier.ComputeCostPerHour)
-		// the limits a tier reports depend on its type
-		switch tier.Type {
-		case v1.DeploymentTypeVLogs, v1.DeploymentTypeVTraces:
-			fmt.Printf("  Ingestion Rate: %d bytes/s, Active Streams: %d\n", tier.IngestionRateBytes, tier.ActiveLogStreams)
-			fmt.Printf("  Read Rate: %d bytes/s, Bytes per Query: %d\n", tier.DataReadRate, tier.BytesPerQuery)
-		default:
-			fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", tier.IngestionRate, tier.ActiveTimeSeries)
-			fmt.Printf("  Read Rate: %d, Series per Query: %d\n", tier.DatapointsReadRate, tier.SeriesReadPerQuery)
+		// the limits a tier reports depend on its type, so exactly one of the
+		// Metrics, Logs and Traces structs is filled in
+		switch {
+		case tier.Metrics != nil:
+			fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", tier.Metrics.IngestionRate, tier.Metrics.ActiveTimeSeries)
+			fmt.Printf("  Read Rate: %d, Series per Query: %d\n", tier.Metrics.DatapointsReadRate, tier.Metrics.SeriesReadPerQuery)
+		case tier.Logs != nil:
+			fmt.Printf("  Ingestion Rate: %d bytes/s, Active Streams: %d\n", tier.Logs.IngestionRateBytes, tier.Logs.ActiveLogStreams)
+			fmt.Printf("  Read Rate: %d bytes/s, Bytes per Query: %d\n", tier.Logs.DataReadRate, tier.Logs.BytesPerQuery)
+		case tier.Traces != nil:
+			fmt.Printf("  Ingestion Rate: %d bytes/s, Active Streams: %d\n", tier.Traces.IngestionRateBytes, tier.Traces.ActiveLogStreams)
+			fmt.Printf("  Read Rate: %d bytes/s, Bytes per Query: %d\n", tier.Traces.DataReadRate, tier.Traces.BytesPerQuery)
 		}
 		fmt.Println()
 	}
@@ -98,7 +102,9 @@ func main() {
 		fmt.Printf("Found tier: %s (ID: %d)\n", foundTier.Name, foundTier.ID)
 		fmt.Printf("  Type: %s, Cloud Provider: %s\n", foundTier.Type, foundTier.CloudProvider)
 		fmt.Printf("  Cost per hour: $%.4f\n", foundTier.ComputeCostPerHour)
-		fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", foundTier.IngestionRate, foundTier.ActiveTimeSeries)
+		if m := foundTier.Metrics; m != nil {
+			fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", m.IngestionRate, m.ActiveTimeSeries)
+		}
 	} else {
 		fmt.Printf("Tier with ID %d not found\n", targetTierID)
 	}

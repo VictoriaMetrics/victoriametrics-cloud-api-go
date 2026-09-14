@@ -76,33 +76,48 @@ func isValidDeduplicationUnit(unit DurationUnit) bool {
 // validateDeduplicationForCreate checks the deduplication window of a create request.
 // The deployment type is known here, so the rule is exact: metrics deployments must
 // carry a unit, and for the other types the API ignores both fields.
-func validateDeduplicationForCreate(deploymentType DeploymentType, deduplicationUnit DurationUnit) error {
+func validateDeduplicationForCreate(deploymentType DeploymentType, deduplication *uint32, deduplicationUnit *DurationUnit) error {
 	if !deploymentType.SupportsDeduplication() {
+		if deduplication != nil || deduplicationUnit != nil {
+			return fmt.Errorf("deduplication window is not supported for %s deployments", deploymentType)
+		}
 		return nil
 	}
-	if !isValidDeduplicationUnit(deduplicationUnit) {
-		return fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", deduplicationUnit)
+	if deduplication == nil || deduplicationUnit == nil {
+		return fmt.Errorf("deduplication and deduplication unit must be set together")
+	}
+	if !isValidDeduplicationUnit(*deduplicationUnit) {
+		return fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", *deduplicationUnit)
 	}
 	return nil
 }
 
 // validateDeduplicationForUpdate checks the deduplication window of an update request.
-// An update request does not carry the deployment type, so a request that leaves both
-// deduplication fields unset is taken as one for a deployment that has no deduplication
-// window, and the API rejects it if the deployment is a metrics one. A request that sets
-// either field is validated as a metrics one.
-func validateDeduplicationForUpdate(deduplication uint32, deduplicationUnit DurationUnit) error {
-	if deduplication == 0 && deduplicationUnit == "" {
+//
+// An update body carries no deployment type, so the request states its intent through the
+// two pointers instead of the client having to guess it: both nil leaves the deployment's
+// window untouched, which is what a vlogs_single or vtraces_single update needs and what a
+// metrics update that is not changing deduplication needs too. Both set changes the
+// window, a zero window included. Exactly one set is always a mistake.
+func validateDeduplicationForUpdate(deduplication *uint32, deduplicationUnit *DurationUnit) error {
+	if deduplication == nil && deduplicationUnit == nil {
 		return nil
 	}
-	if !isValidDeduplicationUnit(deduplicationUnit) {
-		return fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", deduplicationUnit)
+	if deduplication == nil || deduplicationUnit == nil {
+		return fmt.Errorf("deduplication and deduplication unit must be set together")
+	}
+	if !isValidDeduplicationUnit(*deduplicationUnit) {
+		return fmt.Errorf("invalid deduplication unit: %s, only seconds and milliseconds are supported", *deduplicationUnit)
 	}
 	return nil
 }
 
-// isValidDeploymentType reports whether deploymentType is a type the API can create.
-func isValidDeploymentType(deploymentType DeploymentType) bool {
+// isCreatableDeploymentType reports whether deploymentType is a type the API can create.
+//
+// This is a create-time question only. Do not reuse it to gate a list filter: the API
+// decides which types it can filter on, and an SDK build that predates a new type must
+// not stop a caller from asking for it.
+func isCreatableDeploymentType(deploymentType DeploymentType) bool {
 	switch deploymentType {
 	case DeploymentTypeSingleNode, DeploymentTypeCluster, DeploymentTypeVLogs, DeploymentTypeVTraces:
 		return true
@@ -117,7 +132,7 @@ func validateCreateDeploymentParams(
 	region string,
 	provider DeploymentCloudProvider,
 ) error {
-	if !isValidDeploymentType(deploymentType) {
+	if !isCreatableDeploymentType(deploymentType) {
 		return fmt.Errorf("invalid deployment type: %s", deploymentType)
 	}
 	if region == "" {

@@ -108,8 +108,8 @@ deployment := vmcloud.DeploymentCreationRequest{
 	StorageSizeUnit:   vmcloud.StorageUnitGB,
 	Retention:         30, // data retention period in days
 	RetentionUnit:     vmcloud.DurationUnitDay, 
-	Deduplication:     10, // deduplication period in seconds
-	DeduplicationUnit: vmcloud.DurationUnitSecond,
+	Deduplication:     new(uint32(10)), // deduplication period in seconds
+	DeduplicationUnit: new(vmcloud.DurationUnitSecond),
 	MaintenanceWindow: vmcloud.MaintenanceWindowWeekendDays, // maintenance window on weekends
 }
 
@@ -123,7 +123,8 @@ fmt.Printf("Created deployment: %s (ID: %s)\n", createdDeployment.Name, createdD
 
 VictoriaLogs and VictoriaTraces deployments are created the same way, with `Type` set to
 `vmcloud.DeploymentTypeVLogs` or `vmcloud.DeploymentTypeVTraces`. They have no
-deduplication window, so `Deduplication` and `DeduplicationUnit` are left unset:
+deduplication window, so `Deduplication` and `DeduplicationUnit` are left nil. Setting
+either of them on those types is rejected by the client rather than silently dropped:
 
 ```go
 deployment := vmcloud.DeploymentCreationRequest{
@@ -155,6 +156,34 @@ if value, unit, ok := deploymentDetails.Deduplication(); ok {
 	fmt.Printf("Deduplication: %d %s\n", value, unit)
 }
 ```
+
+### Updating a deployment
+
+`DeploymentUpdateRequest.Deduplication` and `.DeduplicationUnit` are pointers. An update
+body carries no deployment type, so nil is what states the intent: it leaves the
+deployment's current window untouched.
+
+```go
+// a metrics deployment, changing the tier but not the deduplication window
+updateRequest := vmcloud.DeploymentUpdateRequest{
+	Name:            "my-deployment",
+	Tier:            22,
+	StorageSize:     30,
+	StorageSizeUnit: vmcloud.StorageUnitGB,
+	Retention:       60,
+	RetentionUnit:   vmcloud.DurationUnitDay,
+	// Deduplication and DeduplicationUnit left nil: the window is not changed
+	MaintenanceWindow: vmcloud.MaintenanceWindowBusinessDays,
+}
+
+// changing the window, zero included
+updateRequest.Deduplication = new(uint32(0))
+updateRequest.DeduplicationUnit = new(vmcloud.DurationUnitSecond)
+```
+
+VictoriaLogs and VictoriaTraces deployments have no deduplication window, so their updates
+always leave both fields nil. Set the two together - a window without a unit, or a unit
+without a window, is rejected before the request is sent.
 
 ### Managing access tokens
 
@@ -256,6 +285,65 @@ if value, unit, ok := info.Deduplication(); ok {
 `ListDeployments` and `ListTiers` return entries of every deployment type, where they
 previously returned only VictoriaMetrics single-node and cluster ones. Pass
 `vmcloud.WithDeploymentType(...)` to keep the previous result of either call.
+
+`TierInfo` no longer carries its limits as flat fields. The common fields moved into an
+embedded `TierInfoCommon`, and the limits into a struct chosen by the tier's type -
+`Metrics` for `single_node` and `cluster`, `Logs` for `vlogs_single`, `Traces` for
+`vtraces_single`, with the other two nil:
+
+```go
+// before
+fmt.Printf("Ingestion rate: %d\n", tier.IngestionRate)
+
+// after
+if m := tier.Metrics; m != nil {
+	fmt.Printf("Ingestion rate: %d\n", m.IngestionRate)
+}
+```
+
+`DeploymentCreationRequest.Deduplication` / `.DeduplicationUnit` and
+`DeploymentUpdateRequest.Deduplication` / `.DeduplicationUnit` changed from `uint32` and
+`DurationUnit` to `*uint32` and `*DurationUnit`, so that a zero window can actually be
+sent and stays distinct from having no window at all. On an update, nil additionally means
+"leave the window alone"; on a create, nil is required for the types that have no window:
+
+```go
+// before
+Deduplication:     10,
+DeduplicationUnit: vmcloud.DurationUnitSecond,
+
+// after
+Deduplication:     new(uint32(10)),
+DeduplicationUnit: new(vmcloud.DurationUnitSecond),
+```
+
+`TierInfo` no longer carries the limits as flat fields. The fields every tier reports moved
+into an embedded `TierInfoCommon`, and the limits moved into one struct per deployment type,
+of which exactly one is non-nil:
+
+```go
+// before
+fmt.Printf("%d %d\n", tier.IngestionRate, tier.ActiveTimeSeries)
+
+// after
+if m := tier.Metrics; m != nil {
+	fmt.Printf("%d %d\n", m.IngestionRate, m.ActiveTimeSeries)
+}
+if l := tier.Logs; l != nil {
+	fmt.Printf("%d %d\n", l.IngestionRateBytes, l.ActiveLogStreams)
+}
+if t := tier.Traces; t != nil {
+	fmt.Printf("%d %d\n", t.IngestionRateBytes, t.ActiveLogStreams)
+}
+```
+
+Reading `tier.ID`, `tier.Name` and `tier.Type` still works, since `TierInfoCommon` is
+embedded. The byte-valued limits (`IngestionRateBytes`, `DataReadRate`, `BytesPerQuery`) are
+`int64` rather than `int`, so that tiers reporting more than 2 GB decode on 32-bit targets.
+
+`DeploymentUpdateRequest` also changed from a type alias to a defined type. Existing code
+that builds it with field names keeps compiling; only code that passed a structurally
+identical anonymous struct needs updating.
 
 ## License
 
