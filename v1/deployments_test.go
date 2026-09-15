@@ -81,8 +81,8 @@ func TestGetDeploymentDetails(t *testing.T) {
 		StorageSizeGb:      10,
 		RetentionValue:     30,
 		RetentionUnit:      DurationUnitDay,
-		DeduplicationValue: 10,
-		DeduplicationUnit:  DurationUnitSecond,
+		DeduplicationValue: new(uint32(10)),
+		DeduplicationUnit:  new(DurationUnitSecond),
 		MaintenanceWindow:  MaintenanceWindowWeekendDays,
 		AccessEndpoint:     "https://test-deployment.victoriametrics.com",
 	}
@@ -133,8 +133,8 @@ func TestCreateDeployment(t *testing.T) {
 		StorageSizeUnit:   StorageUnitGB,
 		Retention:         30,
 		RetentionUnit:     DurationUnitDay,
-		Deduplication:     10,
-		DeduplicationUnit: DurationUnitSecond,
+		Deduplication:     new(uint32(10)),
+		DeduplicationUnit: new(DurationUnitSecond),
 		MaintenanceWindow: MaintenanceWindowWeekendDays,
 	}
 
@@ -199,8 +199,8 @@ func TestUpdateDeployment(t *testing.T) {
 		StorageSizeUnit:   StorageUnitGB,
 		Retention:         60,
 		RetentionUnit:     DurationUnitDay,
-		Deduplication:     15,
-		DeduplicationUnit: DurationUnitSecond,
+		Deduplication:     new(uint32(15)),
+		DeduplicationUnit: new(DurationUnitSecond),
 		MaintenanceWindow: MaintenanceWindowBusinessDays,
 	}
 
@@ -281,4 +281,129 @@ func TestDeleteDeployment_InvalidID(t *testing.T) {
 	if err == nil {
 		t.Fatalf("DeleteDeployment() with invalid ID should return an error")
 	}
+}
+
+// TestDeduplicationOmittedForLogsAndTraces checks that a create or update request for a
+// deployment type without a deduplication window leaves both deduplication fields out of
+// the body, rather than sending a zero window with an empty unit for the API to reject.
+// TestCreateRequestDeduplicationBody pins down what a create request puts on the wire.
+// nil leaves both fields out; a set window is sent as-is, zero included, so that a zero
+// window stays distinct from having no window at all.
+func TestCreateRequestDeduplicationBody(t *testing.T) {
+	f := func(name string, deduplication *uint32, unit *DurationUnit, wantWindow string) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			request := DeploymentCreationRequest{
+				Name: "example", Type: DeploymentTypeSingleNode, Provider: DeploymentCloudProviderAWS,
+				Region: "us-east-1", Tier: 21, StorageSize: 20, StorageSizeUnit: StorageUnitGB,
+				Deduplication: deduplication, DeduplicationUnit: unit,
+				Retention: 30, RetentionUnit: DurationUnitDay,
+			}
+			encoded, err := json.Marshal(request)
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			var body map[string]json.RawMessage
+			if err := json.Unmarshal(encoded, &body); err != nil {
+				t.Fatalf("Unmarshal() error = %v", err)
+			}
+
+			window, hasWindow := body["deduplication"]
+			_, hasUnit := body["deduplication_unit"]
+			if hasWindow != hasUnit {
+				t.Errorf("Marshal() = %s, sent a half-specified window", encoded)
+			}
+			if wantWindow == "" {
+				if hasWindow {
+					t.Errorf("Marshal() = %s, want no deduplication window", encoded)
+				}
+				return
+			}
+			if got := string(window); got != wantWindow {
+				t.Errorf("Marshal() deduplication = %s, want %s", got, wantWindow)
+			}
+		})
+	}
+
+	f("window set", new(uint32(30)), new(DurationUnitSecond), "30")
+	f("zero window", new(uint32(0)), new(DurationUnitSecond), "0")
+	f("nothing set", nil, nil, "")
+}
+
+// byte-valued tier limits must stay 64-bit: a tier can report more than 2 GB, which does
+// not fit in a 32-bit int and fails to decode on 32-bit targets. These assignments stop
+// compiling if any of them is narrowed back to int.
+var (
+	_ int64 = LogsTierInfo{}.IngestionRateBytes
+	_ int64 = LogsTierInfo{}.DataReadRate
+	_ int64 = LogsTierInfo{}.BytesPerQuery
+	_ int64 = TracesTierInfo{}.IngestionRateBytes
+	_ int64 = TracesTierInfo{}.DataReadRate
+	_ int64 = TracesTierInfo{}.BytesPerQuery
+)
+
+func TestDeduplicationOmittedForLogsAndTraces(t *testing.T) {
+	f := func(name string, request any, wantDeduplication bool) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			encoded, err := json.Marshal(request)
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			var body map[string]json.RawMessage
+			if err := json.Unmarshal(encoded, &body); err != nil {
+				t.Fatalf("Unmarshal() error = %v", err)
+			}
+			_, hasUnit := body["deduplication_unit"]
+			if hasUnit != wantDeduplication {
+				t.Errorf("Marshal() = %s, deduplication_unit present = %v, want %v", encoded, hasUnit, wantDeduplication)
+			}
+		})
+	}
+
+	f("create vlogs", DeploymentCreationRequest{
+		Name:          "l1",
+		Type:          DeploymentTypeVLogs,
+		Tier:          101,
+		Retention:     30,
+		RetentionUnit: DurationUnitDay,
+	}, false)
+	f("create vtraces", DeploymentCreationRequest{
+		Name:          "t1",
+		Type:          DeploymentTypeVTraces,
+		Tier:          201,
+		Retention:     30,
+		RetentionUnit: DurationUnitDay,
+	}, false)
+	f("create metrics", DeploymentCreationRequest{
+		Name:              "m1",
+		Type:              DeploymentTypeSingleNode,
+		Tier:              21,
+		Deduplication:     new(uint32(30)),
+		DeduplicationUnit: new(DurationUnitSecond),
+		Retention:         30,
+		RetentionUnit:     DurationUnitDay,
+	}, true)
+	f("update without deduplication", DeploymentUpdateRequest{
+		Name:          "l1",
+		Tier:          101,
+		Retention:     30,
+		RetentionUnit: DurationUnitDay,
+	}, false)
+	f("update with deduplication", DeploymentUpdateRequest{
+		Name:              "m1",
+		Tier:              21,
+		Deduplication:     new(uint32(30)),
+		DeduplicationUnit: new(DurationUnitSecond),
+		Retention:         30,
+		RetentionUnit:     DurationUnitDay,
+	}, true)
+	f("update with a zero deduplication window", DeploymentUpdateRequest{
+		Name:              "m1",
+		Tier:              21,
+		Deduplication:     new(uint32(0)),
+		DeduplicationUnit: new(DurationUnitSecond),
+		Retention:         30,
+		RetentionUnit:     DurationUnitDay,
+	}, true)
 }

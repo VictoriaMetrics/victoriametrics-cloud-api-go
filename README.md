@@ -23,6 +23,18 @@ Just sign up for a [free trial](https://victoriametrics.cloud) to get started wi
 - Manage alerting/recording rule files for deployments (list, create, update, delete, get content)
 - Retrieve information about cloud providers, regions and tiers
 
+### Supported deployment types
+
+| Type | Constant | Deduplication | Alerting/recording rules |
+|---|---|---|---|
+| VictoriaMetrics single-node | `DeploymentTypeSingleNode` | yes | yes |
+| VictoriaMetrics cluster | `DeploymentTypeCluster` | yes | yes |
+| VictoriaLogs | `DeploymentTypeVLogs` | no | no |
+| VictoriaTraces | `DeploymentTypeVTraces` | no | no |
+
+VictoriaTraces deployments are available only for accounts where VictoriaTraces is
+enabled; for other accounts the API hides its tiers and rejects its deployments.
+
 ## Installation
 
 ```bash
@@ -65,6 +77,7 @@ func main() {
 ### Listing deployments
 
 ```go
+// Deployments of every type are returned unless the request is narrowed down.
 deployments, err := client.ListDeployments(context.Background())
 if err != nil {
 	log.Fatalf("Failed to list deployments: %v", err)
@@ -72,6 +85,13 @@ if err != nil {
 
 for _, deployment := range deployments {
 	fmt.Printf("Deployment: %s (ID: %s)\n", deployment.Name, deployment.ID)
+}
+
+// Only VictoriaLogs deployments. The same option narrows down ListTiers.
+vlogsDeployments, err := client.ListDeployments(context.Background(),
+	vmcloud.WithDeploymentType(vmcloud.DeploymentTypeVLogs))
+if err != nil {
+	log.Fatalf("Failed to list VictoriaLogs deployments: %v", err)
 }
 ```
 
@@ -88,8 +108,8 @@ deployment := vmcloud.DeploymentCreationRequest{
 	StorageSizeUnit:   vmcloud.StorageUnitGB,
 	Retention:         30, // data retention period in days
 	RetentionUnit:     vmcloud.DurationUnitDay, 
-	Deduplication:     10, // deduplication period in seconds
-	DeduplicationUnit: vmcloud.DurationUnitSecond,
+	Deduplication:     new(uint32(10)), // deduplication period in seconds
+	DeduplicationUnit: new(vmcloud.DurationUnitSecond),
 	MaintenanceWindow: vmcloud.MaintenanceWindowWeekendDays, // maintenance window on weekends
 }
 
@@ -100,6 +120,70 @@ if err != nil {
 
 fmt.Printf("Created deployment: %s (ID: %s)\n", createdDeployment.Name, createdDeployment.ID)
 ```
+
+VictoriaLogs and VictoriaTraces deployments are created the same way, with `Type` set to
+`vmcloud.DeploymentTypeVLogs` or `vmcloud.DeploymentTypeVTraces`. They have no
+deduplication window, so `Deduplication` and `DeduplicationUnit` are left nil. Setting
+either of them on those types is rejected by the client rather than silently dropped:
+
+```go
+deployment := vmcloud.DeploymentCreationRequest{
+	Name:              "my-logs",
+	Type:              vmcloud.DeploymentTypeVLogs,
+	Provider:          vmcloud.DeploymentCloudProviderAWS,
+	Region:            "us-east-2",
+	Tier:              101,
+	StorageSize:       20,
+	StorageSizeUnit:   vmcloud.StorageUnitGB,
+	Retention:         30,
+	RetentionUnit:     vmcloud.DurationUnitDay,
+	MaintenanceWindow: vmcloud.MaintenanceWindowWeekendDays,
+}
+```
+
+Storage size is validated by the API, not by this library: the valid range and the step a
+size must sit on depend on the storage type, the deployment topology and the
+per-installation configuration, none of which the client can see.
+
+### Reading the deduplication window
+
+`DeploymentInfo.DeduplicationValue` and `DeploymentInfo.DeduplicationUnit` are absent for
+VictoriaLogs and VictoriaTraces deployments, which have no deduplication window. Use the
+`Deduplication` accessor rather than dereferencing them:
+
+```go
+if value, unit, ok := deploymentDetails.Deduplication(); ok {
+	fmt.Printf("Deduplication: %d %s\n", value, unit)
+}
+```
+
+### Updating a deployment
+
+`DeploymentUpdateRequest.Deduplication` and `.DeduplicationUnit` are pointers. An update
+body carries no deployment type, so nil is what states the intent: it leaves the
+deployment's current window untouched.
+
+```go
+// a metrics deployment, changing the tier but not the deduplication window
+updateRequest := vmcloud.DeploymentUpdateRequest{
+	Name:            "my-deployment",
+	Tier:            22,
+	StorageSize:     30,
+	StorageSizeUnit: vmcloud.StorageUnitGB,
+	Retention:       60,
+	RetentionUnit:   vmcloud.DurationUnitDay,
+	// Deduplication and DeduplicationUnit left nil: the window is not changed
+	MaintenanceWindow: vmcloud.MaintenanceWindowBusinessDays,
+}
+
+// changing the window, zero included
+updateRequest.Deduplication = new(uint32(0))
+updateRequest.DeduplicationUnit = new(vmcloud.DurationUnitSecond)
+```
+
+VictoriaLogs and VictoriaTraces deployments have no deduplication window, so their updates
+always leave both fields nil. Set the two together - a window without a unit, or a unit
+without a window, is rejected before the request is sent.
 
 ### Managing access tokens
 
@@ -129,6 +213,10 @@ for _, token := range tokens {
 ```
 
 ### Managing alerting/recording rules
+
+Only VictoriaMetrics single-node and cluster deployments run `vmalert`. The rule file
+endpoints return an error for VictoriaLogs and VictoriaTraces deployments, which
+`DeploymentType.SupportsAlertingRules` reports up front.
 
 ```go
 // Create a new rule file
@@ -174,6 +262,88 @@ make test
 ```
 
 The tests use mocked HTTP responses and don't require actual API credentials.
+
+## Upgrading
+
+### To v0.2.0
+
+`DeploymentInfo.DeduplicationValue` and `DeploymentInfo.DeduplicationUnit` changed from
+`uint32` and `DurationUnit` to `*uint32` and `*DurationUnit`, following the API, which
+now omits both for deployment types that have no deduplication window. Read them through
+the `Deduplication` accessor:
+
+```go
+// before
+fmt.Printf("Deduplication: %d %s\n", info.DeduplicationValue, info.DeduplicationUnit)
+
+// after
+if value, unit, ok := info.Deduplication(); ok {
+	fmt.Printf("Deduplication: %d %s\n", value, unit)
+}
+```
+
+`ListDeployments` and `ListTiers` return entries of every deployment type, where they
+previously returned only VictoriaMetrics single-node and cluster ones. Pass
+`vmcloud.WithDeploymentType(...)` to keep the previous result of either call.
+
+`TierInfo` no longer carries its limits as flat fields. The common fields moved into an
+embedded `TierInfoCommon`, and the limits into a struct chosen by the tier's type -
+`Metrics` for `single_node` and `cluster`, `Logs` for `vlogs_single`, `Traces` for
+`vtraces_single`, with the other two nil:
+
+```go
+// before
+fmt.Printf("Ingestion rate: %d\n", tier.IngestionRate)
+
+// after
+if m := tier.Metrics; m != nil {
+	fmt.Printf("Ingestion rate: %d\n", m.IngestionRate)
+}
+```
+
+`DeploymentCreationRequest.Deduplication` / `.DeduplicationUnit` and
+`DeploymentUpdateRequest.Deduplication` / `.DeduplicationUnit` changed from `uint32` and
+`DurationUnit` to `*uint32` and `*DurationUnit`, so that a zero window can actually be
+sent and stays distinct from having no window at all. On an update, nil additionally means
+"leave the window alone"; on a create, nil is required for the types that have no window:
+
+```go
+// before
+Deduplication:     10,
+DeduplicationUnit: vmcloud.DurationUnitSecond,
+
+// after
+Deduplication:     new(uint32(10)),
+DeduplicationUnit: new(vmcloud.DurationUnitSecond),
+```
+
+`TierInfo` no longer carries the limits as flat fields. The fields every tier reports moved
+into an embedded `TierInfoCommon`, and the limits moved into one struct per deployment type,
+of which exactly one is non-nil:
+
+```go
+// before
+fmt.Printf("%d %d\n", tier.IngestionRate, tier.ActiveTimeSeries)
+
+// after
+if m := tier.Metrics; m != nil {
+	fmt.Printf("%d %d\n", m.IngestionRate, m.ActiveTimeSeries)
+}
+if l := tier.Logs; l != nil {
+	fmt.Printf("%d %d\n", l.IngestionRateBytes, l.ActiveLogStreams)
+}
+if t := tier.Traces; t != nil {
+	fmt.Printf("%d %d\n", t.IngestionRateBytes, t.ActiveLogStreams)
+}
+```
+
+Reading `tier.ID`, `tier.Name` and `tier.Type` still works, since `TierInfoCommon` is
+embedded. The byte-valued limits (`IngestionRateBytes`, `DataReadRate`, `BytesPerQuery`) are
+`int64` rather than `int`, so that tiers reporting more than 2 GB decode on 32-bit targets.
+
+`DeploymentUpdateRequest` also changed from a type alias to a defined type. Existing code
+that builds it with field names keeps compiling; only code that passed a structurally
+identical anonymous struct needs updating.
 
 ## License
 

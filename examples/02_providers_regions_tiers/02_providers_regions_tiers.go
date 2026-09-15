@@ -46,6 +46,8 @@ func main() {
 	fmt.Println()
 
 	// Example 3: List available tiers
+	// Without a filter the API returns tiers of every deployment type: VictoriaMetrics
+	// single-node and cluster, VictoriaLogs, and VictoriaTraces where it is enabled.
 	fmt.Println("=== Available Tiers ===")
 	tiers, err := client.ListTiers(ctx)
 	if err != nil {
@@ -56,9 +58,33 @@ func main() {
 		fmt.Printf("Tier: %s (ID: %d)\n", tier.Name, tier.ID)
 		fmt.Printf("  Type: %s, Cloud Provider: %s\n", tier.Type, tier.CloudProvider)
 		fmt.Printf("  Cost per hour: $%.4f\n", tier.ComputeCostPerHour)
-		fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", tier.IngestionRate, tier.ActiveTimeSeries)
+		// the limits a tier reports depend on its type, so exactly one of the
+		// Metrics, Logs and Traces structs is filled in
+		switch {
+		case tier.Metrics != nil:
+			fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", tier.Metrics.IngestionRate, tier.Metrics.ActiveTimeSeries)
+			fmt.Printf("  Read Rate: %d, Series per Query: %d\n", tier.Metrics.DatapointsReadRate, tier.Metrics.SeriesReadPerQuery)
+		case tier.Logs != nil:
+			fmt.Printf("  Ingestion Rate: %d bytes/s, Active Streams: %d\n", tier.Logs.IngestionRateBytes, tier.Logs.ActiveLogStreams)
+			fmt.Printf("  Read Rate: %d bytes/s, Bytes per Query: %d\n", tier.Logs.DataReadRate, tier.Logs.BytesPerQuery)
+		case tier.Traces != nil:
+			fmt.Printf("  Ingestion Rate: %d bytes/s, Active Streams: %d\n", tier.Traces.IngestionRateBytes, tier.Traces.ActiveLogStreams)
+			fmt.Printf("  Read Rate: %d bytes/s, Bytes per Query: %d\n", tier.Traces.DataReadRate, tier.Traces.BytesPerQuery)
+		}
 		fmt.Println()
 	}
+
+	// Example 3b: List only the VictoriaLogs tiers
+	fmt.Println("=== VictoriaLogs Tiers ===")
+	vlogsTiers, err := client.ListTiers(ctx, v1.WithDeploymentType(v1.DeploymentTypeVLogs))
+	if err != nil {
+		log.Fatalf("Failed to list VictoriaLogs tiers: %v", err)
+	}
+
+	for _, tier := range vlogsTiers {
+		fmt.Printf("Tier: %s (ID: %d), cost per hour: $%.4f\n", tier.Name, tier.ID, tier.ComputeCostPerHour)
+	}
+	fmt.Println()
 
 	// Example 4: Find a specific tier by ID
 	fmt.Println("=== Finding a Specific Tier ===")
@@ -76,7 +102,9 @@ func main() {
 		fmt.Printf("Found tier: %s (ID: %d)\n", foundTier.Name, foundTier.ID)
 		fmt.Printf("  Type: %s, Cloud Provider: %s\n", foundTier.Type, foundTier.CloudProvider)
 		fmt.Printf("  Cost per hour: $%.4f\n", foundTier.ComputeCostPerHour)
-		fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", foundTier.IngestionRate, foundTier.ActiveTimeSeries)
+		if m := foundTier.Metrics; m != nil {
+			fmt.Printf("  Ingestion Rate: %d, Active Time Series: %d\n", m.IngestionRate, m.ActiveTimeSeries)
+		}
 	} else {
 		fmt.Printf("Tier with ID %d not found\n", targetTierID)
 	}
