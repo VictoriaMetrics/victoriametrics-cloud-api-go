@@ -743,3 +743,28 @@ func TestUpdateWithHalfSetDeduplicationIsRejected(t *testing.T) {
 		t.Error("UpdateDeployment() with a unit and no window returned no error")
 	}
 }
+
+func TestListWithMultipleDeploymentTypes(t *testing.T) {
+	server, client, queries := setupQueryCapturingServer(t, "[]")
+	defer server.Close()
+
+	if _, err := client.ListDeployments(context.Background(), WithDeploymentType(DeploymentTypeSingleNode, DeploymentTypeCluster)); err != nil {
+		t.Fatalf("ListDeployments(WithDeploymentType) error = %v", err)
+	}
+	if _, err := client.ListTiers(context.Background(), WithDeploymentType(DeploymentTypeVLogs), WithDeploymentType(DeploymentTypeVTraces)); err != nil {
+		t.Fatalf("ListTiers(WithDeploymentType, WithDeploymentType) error = %v", err)
+	}
+	if _, err := client.ListDeployments(context.Background(), WithDeploymentType()); err != nil {
+		t.Fatalf("ListDeployments(WithDeploymentType()) error = %v", err)
+	}
+
+	want := []string{"type=single_node&type=cluster", "type=vlogs_single&type=vtraces_single", ""}
+	if len(*queries) != len(want) {
+		t.Fatalf("captured queries = %q, want %q", *queries, want)
+	}
+	for i, got := range *queries {
+		if got != want[i] {
+			t.Errorf("request %d query = %q, want %q", i, got, want[i])
+		}
+	}
+}

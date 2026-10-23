@@ -93,6 +93,13 @@ vlogsDeployments, err := client.ListDeployments(context.Background(),
 if err != nil {
 	log.Fatalf("Failed to list VictoriaLogs deployments: %v", err)
 }
+
+// Several types at once, e.g. every VictoriaMetrics deployment.
+metricsDeployments, err := client.ListDeployments(context.Background(),
+	vmcloud.WithDeploymentType(vmcloud.DeploymentTypeSingleNode, vmcloud.DeploymentTypeCluster))
+if err != nil {
+	log.Fatalf("Failed to list VictoriaMetrics deployments: %v", err)
+}
 ```
 
 ### Creating a deployment
