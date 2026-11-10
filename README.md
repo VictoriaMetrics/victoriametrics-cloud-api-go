@@ -256,6 +256,33 @@ for _, fileName := range ruleFiles {
 }
 ```
 
+#### Concurrent edits
+
+Rule file writes overwrite by default. To make one fail instead of silently replacing
+someone else's change, read the file with its version and pass it back:
+
+```go
+file, err := client.GetDeploymentRuleFile(ctx, "deployment-id", "high-latency-alert.yml")
+if err != nil {
+	log.Fatalf("Failed to get rule file: %v", err)
+}
+
+err = client.UpdateDeploymentRuleFileContentWithOptions(ctx, "deployment-id", "high-latency-alert.yml", newContent, vmcloud.WithIfMatch(file.ETag))
+var apiErr *vmcloud.APIError
+if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict {
+	// The file changed since it was read: read it again and reapply the edit.
+}
+```
+
+`file.ETag` is the raw `ETag` header and is sent back unchanged. If it is empty (the response
+carried no version), `WithIfMatch` fails the call with `vmcloud.ErrEmptyETag` and sends nothing,
+so the write never falls back to an unconditional overwrite.
+
+`WithIfNoneMatchAny()` creates a file only if it does not exist yet, and
+`DeleteDeploymentRuleFileWithOptions` takes the same options for deletes. The methods without
+options keep writing unconditionally. Every failed request
+returns `*vmcloud.APIError`, which carries the HTTP status and the API's error message.
+
 ## Documentation
 
 For more information about the VictoriaMetrics Cloud API, please refer to the [VictoriaMetrics Cloud documentation](https://docs.victoriametrics.com/victoriametrics-cloud/api/).
