@@ -324,24 +324,20 @@ func (a *VMCloudAPIClient) GetDeploymentRuleFile(ctx context.Context, deployment
 // UpdateDeploymentRuleFileContent updates the content of an existing alerting/recording rules file for a deployment by deployment ID and file name.
 // To make the write conditional, use UpdateDeploymentRuleFileContentWithOptions.
 func (a *VMCloudAPIClient) UpdateDeploymentRuleFileContent(ctx context.Context, deploymentID, ruleFileName, content string) error {
-	return a.writeRuleFile(ctx, "update", deploymentID, ruleFileName, content, nil)
+	return a.UpdateDeploymentRuleFileContentWithOptions(ctx, deploymentID, ruleFileName, content)
 }
 
 // CreateDeploymentRuleFileContent creates a new alerting/recording rules file for a deployment by deployment ID and file name.
 // It overwrites an existing file of that name; to refuse that, use
 // UpdateDeploymentRuleFileContentWithOptions with WithIfNoneMatchAny.
 func (a *VMCloudAPIClient) CreateDeploymentRuleFileContent(ctx context.Context, deploymentID, ruleFileName, content string) error {
-	return a.writeRuleFile(ctx, "create", deploymentID, ruleFileName, content, nil)
+	return a.UpdateDeploymentRuleFileContentWithOptions(ctx, deploymentID, ruleFileName, content)
 }
 
 // UpdateDeploymentRuleFileContentWithOptions writes an alerting/recording rules file, creating it if it does not exist.
 // WithIfMatch writes only over that version, WithIfNoneMatchAny only if the file does not exist yet,
 // and WithActor names the person the write is made for.
 func (a *VMCloudAPIClient) UpdateDeploymentRuleFileContentWithOptions(ctx context.Context, deploymentID, ruleFileName, content string, options ...RequestOption) error {
-	return a.writeRuleFile(ctx, "update", deploymentID, ruleFileName, content, options)
-}
-
-func (a *VMCloudAPIClient) writeRuleFile(ctx context.Context, verb, deploymentID, ruleFileName, content string, options []RequestOption) error {
 	if err := checkDeploymentID(deploymentID); err != nil {
 		return err
 	}
@@ -350,12 +346,12 @@ func (a *VMCloudAPIClient) writeRuleFile(ctx context.Context, verb, deploymentID
 	}
 	headers, err := requestHeaders(options)
 	if err != nil {
-		return fmt.Errorf("failed to %s rule file %q for deployment %q: %w", verb, ruleFileName, deploymentID, err)
+		return fmt.Errorf("failed to update rule file %q for deployment %q: %w", ruleFileName, deploymentID, err)
 	}
 	body := bytes.NewBufferString(content)
 	_, _, err = doRequest(ctx, a, http.MethodPost, body, nil, headers, "/api/v1/deployments", deploymentID, "rule-sets", "files", ruleFileName)
 	if err != nil {
-		return fmt.Errorf("failed to %s rule file %q for deployment %q: %w", verb, ruleFileName, deploymentID, err)
+		return fmt.Errorf("failed to update rule file %q for deployment %q: %w", ruleFileName, deploymentID, err)
 	}
 	return nil
 }

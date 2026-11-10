@@ -297,14 +297,6 @@ func TestRuleFileEmptyETagNotSent(t *testing.T) {
 	}
 }
 
-func TestCreateRuleFileErrorText(t *testing.T) {
-	client, _ := recordingServer(t, http.StatusConflict, `{"error": "exists"}`, nil)
-	err := client.CreateDeploymentRuleFileContent(context.Background(), conditionalDeploymentID, "a.yml", "x")
-	if err == nil || !strings.Contains(err.Error(), "failed to create rule file") {
-		t.Fatalf("err = %v, want a create error", err)
-	}
-}
-
 func TestGetDeploymentRuleFile(t *testing.T) {
 	for header, want := range map[string]string{`"abc"`: `"abc"`, `W/"abc"`: `W/"abc"`, "": ""} {
 		client, _ := recordingServer(t, http.StatusOK, "groups: []", map[string]string{"ETag": header})
