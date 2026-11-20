@@ -287,6 +287,7 @@ func TestTierInfoRoundTrip(t *testing.T) {
 		})
 	}
 
+	computeUnits := 1
 	f("metrics", TierInfo{
 		TierInfoCommon: TierInfoCommon{
 			ID:                            21,
@@ -296,6 +297,10 @@ func TestTierInfoRoundTrip(t *testing.T) {
 			ComputeCostPerHour:            0.1,
 			AccessTokenConcurrentRequests: 5,
 			AccessTokenLimit:              10,
+			Version:                       2,
+			ComputeUnits:                  &computeUnits,
+			CPUMillicores:                 1000,
+			MemoryMB:                      2870,
 		},
 		Metrics: &MetricsTierInfo{
 			IngestionRate:      10000,
@@ -397,6 +402,7 @@ func TestListTiersAllDeploymentTypes(t *testing.T) {
 		{
 			"id": 21, "type": "single_node", "cloud_provider": "aws", "name": "s.small.a",
 			"compute_cost_per_hour": 0.1,
+			"version": 2, "compute_units": 1, "cpu_millicores": 1000, "memory_mb": 2870,
 			"ingestion_rate": 10000, "active_time_series": 100000, "new_series_over_24h": 200000,
 			"datapoints_read_rate": 30000, "series_read_per_query": 1500,
 			"access_token_concurrent_requests": 5, "access_token_limit": 10
@@ -404,6 +410,7 @@ func TestListTiersAllDeploymentTypes(t *testing.T) {
 		{
 			"id": 41, "type": "cluster", "cloud_provider": "aws", "name": "c.large.a",
 			"compute_cost_per_hour": 1.5,
+			"version": 3, "compute_units": 13, "cpu_millicores": 12800, "memory_mb": 59200, "storage_nodes": 10,
 			"ingestion_rate": 500000, "active_time_series": 5000000, "new_series_over_24h": 1000000,
 			"datapoints_read_rate": 900000, "series_read_per_query": 50000,
 			"access_token_concurrent_requests": 20, "access_token_limit": 40
@@ -411,6 +418,7 @@ func TestListTiersAllDeploymentTypes(t *testing.T) {
 		{
 			"id": 101, "type": "vlogs_single", "cloud_provider": "aws", "name": "l.small.a",
 			"compute_cost_per_hour": 0.25,
+			"version": 2, "compute_units": 1, "cpu_millicores": 1000, "memory_mb": 3810,
 			"ingestion_rate_bytes": 10485760, "active_log_streams": 10000, "new_streams_over_24h": 20000,
 			"data_read_rate": 10485760, "bytes_per_query": 1073741824,
 			"access_token_concurrent_requests": 5, "access_token_limit": 10
@@ -418,6 +426,7 @@ func TestListTiersAllDeploymentTypes(t *testing.T) {
 		{
 			"id": 201, "type": "vtraces_single", "cloud_provider": "aws", "name": "t.small.a",
 			"compute_cost_per_hour": 0.35,
+			"version": 2, "compute_units": 1, "cpu_millicores": 1000, "memory_mb": 4096,
 			"ingestion_rate_bytes": 20971520, "active_log_streams": 15000, "new_streams_over_24h": 30000,
 			"data_read_rate": 20971520, "bytes_per_query": 2147483648,
 			"access_token_concurrent_requests": 5, "access_token_limit": 10
@@ -440,6 +449,12 @@ func TestListTiersAllDeploymentTypes(t *testing.T) {
 		DeploymentTypeSingleNode, DeploymentTypeCluster, DeploymentTypeVLogs, DeploymentTypeVTraces,
 	}
 	wantIDs := []uint32{21, 41, 101, 201}
+	wantVersions := []int{2, 3, 2, 2}
+	wantCUs := []int{1, 13, 1, 1}
+	wantCPU := []int{1000, 12800, 1000, 1000}
+	wantMemory := []int{2870, 59200, 3810, 4096}
+	// only cluster tiers report storage nodes
+	wantStorageNodes := []int{0, 10, 0, 0}
 	for i, tier := range result {
 		if tier.Type != wantTypes[i] {
 			t.Errorf("tier %d Type = %s, want %s", i, tier.Type, wantTypes[i])
@@ -452,6 +467,18 @@ func TestListTiersAllDeploymentTypes(t *testing.T) {
 		}
 		if tier.AccessTokenLimit == 0 {
 			t.Errorf("tier %d AccessTokenLimit = 0, want it decoded", i)
+		}
+		if tier.Version != wantVersions[i] {
+			t.Errorf("tier %d Version = %d, want %d", i, tier.Version, wantVersions[i])
+		}
+		if tier.ComputeUnits == nil || *tier.ComputeUnits != wantCUs[i] {
+			t.Errorf("tier %d ComputeUnits = %v, want %d", i, tier.ComputeUnits, wantCUs[i])
+		}
+		if tier.CPUMillicores != wantCPU[i] || tier.MemoryMB != wantMemory[i] {
+			t.Errorf("tier %d resources = %dm/%dMB, want %dm/%dMB", i, tier.CPUMillicores, tier.MemoryMB, wantCPU[i], wantMemory[i])
+		}
+		if tier.StorageNodes != wantStorageNodes[i] {
+			t.Errorf("tier %d StorageNodes = %d, want %d", i, tier.StorageNodes, wantStorageNodes[i])
 		}
 	}
 
@@ -766,5 +793,16 @@ func TestListWithMultipleDeploymentTypes(t *testing.T) {
 		if got != want[i] {
 			t.Errorf("request %d query = %q, want %q", i, got, want[i])
 		}
+	}
+}
+
+func TestDeploymentPriceAgentDisk(t *testing.T) {
+	var price DeploymentPrice
+	data := []byte(`{"compute_cost":2381.99,"storage_cost":10.22,"agent_disk_cost":20.44,"agent_disk_size":38654705664,"total_cost":2412.65}`)
+	if err := json.Unmarshal(data, &price); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if price.AgentDiskCost != 20.44 || price.AgentDiskSize != 38654705664 {
+		t.Fatalf("unexpected agent disk fields: %+v", price)
 	}
 }
