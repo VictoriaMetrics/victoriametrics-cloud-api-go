@@ -58,6 +58,13 @@ func main() {
 		fmt.Printf("Tier: %s (ID: %d)\n", tier.Name, tier.ID)
 		fmt.Printf("  Type: %s, Cloud Provider: %s\n", tier.Type, tier.CloudProvider)
 		fmt.Printf("  Cost per hour: $%.4f\n", tier.ComputeCostPerHour)
+		fmt.Printf("  Version: %d, CPU: %dm, Memory: %d MB\n", tier.Version, tier.CPUMillicores, tier.MemoryMB)
+		if tier.ComputeUnits != nil {
+			fmt.Printf("  Compute units: %d\n", *tier.ComputeUnits)
+		}
+		if tier.StorageNodes > 0 {
+			fmt.Printf("  Storage nodes per zone: %d\n", tier.StorageNodes)
+		}
 		// the limits a tier reports depend on its type, so exactly one of the
 		// Metrics, Logs and Traces structs is filled in
 		switch {
