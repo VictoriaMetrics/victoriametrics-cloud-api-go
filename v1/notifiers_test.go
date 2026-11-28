@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -276,6 +277,53 @@ func TestUpdateCloudAlertmanager(t *testing.T) {
 	}
 	if result.Name != request.Name {
 		t.Errorf("UpdateCloudAlertmanager() Name = %s, want %s", result.Name, request.Name)
+	}
+}
+
+func TestCreateCloudAlertmanagerWithTemplates(t *testing.T) {
+	request := CloudAlertmanagerRequest{
+		Name:      "Hosted AM",
+		Config:    "route:\n  receiver: default\n",
+		Templates: "{{ define \"slack.title\" }}{{ end }}",
+	}
+
+	var gotBody CloudAlertmanagerRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("Failed to decode request body: %v", err)
+		}
+		response := CloudAlertmanager{
+			ID:        "am-id-2",
+			Name:      request.Name,
+			Config:    request.Config,
+			Templates: request.Templates,
+			Status:    NotifierStatusUnknown,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		responseJSON, err := json.Marshal(response)
+		if err != nil {
+			t.Fatalf("Failed to marshal response: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(responseJSON)
+	}))
+	defer server.Close()
+
+	client, err := New("test-api-key", WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	result, err := client.CreateCloudAlertmanager(context.Background(), request)
+	if err != nil {
+		t.Fatalf("CreateCloudAlertmanager() error = %v", err)
+	}
+	if gotBody.Templates != request.Templates {
+		t.Errorf("request sent Templates = %q, want %q", gotBody.Templates, request.Templates)
+	}
+	if result.Templates != request.Templates {
+		t.Errorf("CreateCloudAlertmanager() Templates = %q, want %q", result.Templates, request.Templates)
 	}
 }
 

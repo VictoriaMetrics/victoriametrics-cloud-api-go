@@ -67,6 +67,7 @@ type CloudAlertmanager struct {
 	ID        string         `json:"id"`
 	Name      string         `json:"name"`
 	Config    string         `json:"config"`
+	Templates string         `json:"templates,omitempty"`
 	Status    NotifierStatus `json:"status"`
 	Message   string         `json:"message,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -78,8 +79,9 @@ type CloudAlertmanagersList []CloudAlertmanager
 
 // CloudAlertmanagerRequest creates or updates a CloudAlertmanager.
 type CloudAlertmanagerRequest struct {
-	Name   string `json:"name"`
-	Config string `json:"config"`
+	Name      string `json:"name"`
+	Config    string `json:"config"`
+	Templates string `json:"templates,omitempty"`
 }
 
 // DeploymentNotifier is the notifier currently attached to a deployment.
